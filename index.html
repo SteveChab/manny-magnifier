@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>LowViz Magnifier</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --serif: Georgia, 'Times New Roman', Times, serif;
+    --mode-bar-height: 42px;
+    --btn-bar-height:  90px;
+    --controls-height: calc(var(--mode-bar-height) + var(--btn-bar-height) + 4px); /* two 2px borders */
+  }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+  }
+
+  /* ── Viewfinder ── */
+  #viewfinder {
+    position: fixed;
+    inset: 0;
+    bottom: var(--controls-height);
+    overflow: hidden;
+    background: #000;
+    /* isolate so mix-blend-mode is scoped to this stacking context */
+    isolation: isolate;
+  }
+
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform-origin: center center;
+    display: block;
+  }
+
+  /* Tint overlay — multiply blend tints the grayscale video */
+  #tint-overlay {
+    position: absolute;
+    inset: 0;
+    mix-blend-mode: multiply;
+    pointer-events: none;
+    /* background set by JS */
+  }
+
+  #no-camera {
+    display: none;
+    position: absolute;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 14px;
+    color: #555;
+    font-family: var(--serif);
+    font-size: 18px;
+    font-weight: bold;
+    text-align: center;
+    padding: 2rem;
+    line-height: 1.6;
+  }
+
+  /* ── Controls ── */
+  #controls {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: var(--controls-height);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Mode bar: mode name left, zoom right */
+  #mode-bar {
+    height: var(--mode-bar-height);
+    background: #000;
+    border-top: 2px solid #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    flex-shrink: 0;
+  }
+
+  #mode-name,
+  #zoom-badge {
+    color: #fff;
+    font-family: var(--serif);
+    font-size: 18px;
+    font-weight: bold;
+    line-height: 1;
+  }
+
+  /* Button bar */
+  #btn-bar {
+    height: var(--btn-bar-height);
+    display: flex;
+    background: #000;
+    border-top: 2px solid #fff;
+    flex-shrink: 0;
+  }
+
+  .btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-right: 2px solid #fff;
+    background: #000;
+    cursor: pointer;
+    padding: 8px;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    transition: background 0.07s;
+  }
+
+  .btn:last-child { border-right: none; }
+  .btn:active     { background: #181818; }
+
+  .btn svg {
+    width: 54px;
+    height: 54px;
+    display: block;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- Viewfinder: video + tint overlay, both inside isolation context -->
+<div id="viewfinder">
+  <video id="camera" autoplay playsinline muted></video>
+  <div id="tint-overlay"></div>
+  <div id="no-camera">
+    Camera not available.<br>
+    Open in a browser and<br>allow camera access.
+  </div>
+</div>
+
+<!-- Controls: outside viewfinder, never filtered -->
+<div id="controls">
+
+  <div id="mode-bar">
+    <span id="mode-name" aria-live="polite">Yellow on Black</span>
+    <span id="zoom-badge" aria-live="polite" aria-label="Zoom level">1×</span>
+  </div>
+
+  <div id="btn-bar" role="toolbar" aria-label="Magnifier controls">
+
+    <!-- Mode cycle: circle whose fill+stroke reflect the active mode -->
+    <button class="btn" onclick="nextMode()" aria-label="Cycle color mode">
+      <svg id="mode-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <circle id="mode-circle" cx="12" cy="12" r="8.5" stroke-width="2.2"/>
+      </svg>
+    </button>
+
+    <!-- Zoom In -->
+    <button class="btn" onclick="zoomIn()" aria-label="Zoom in">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        <line x1="11" y1="7" x2="11" y2="15"/>
+        <line x1="7"  y1="11" x2="15" y2="11"/>
+      </svg>
+    </button>
+
+    <!-- Zoom Out -->
+    <button class="btn" onclick="zoomOut()" aria-label="Zoom out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        <line x1="7"  y1="11" x2="15" y2="11"/>
+      </svg>
+    </button>
+
+    <!-- Brightness cycle: sun fills in as level increases -->
+    <button class="btn" onclick="nextBright()" aria-label="Cycle brightness">
+      <svg id="bright-svg" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+        <circle id="bright-circle" cx="12" cy="12" r="4" fill="none"/>
+        <line x1="12"   y1="2"    x2="12"   y2="4.5"/>
+        <line x1="12"   y1="19.5" x2="12"   y2="22"/>
+        <line x1="2"    y1="12"   x2="4.5"  y2="12"/>
+        <line x1="19.5" y1="12"   x2="22"   y2="12"/>
+        <line x1="4.93" y1="4.93"  x2="6.7"   y2="6.7"/>
+        <line x1="17.3" y1="17.3"  x2="19.07" y2="19.07"/>
+        <line x1="4.93" y1="19.07" x2="6.7"   y2="17.3"/>
+        <line x1="17.3" y1="6.7"   x2="19.07" y2="4.93"/>
+      </svg>
+    </button>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /*
+   * Color mode strategy:
+   *   Base filter:  grayscale(1) for dark-text modes
+   *                 invert(1) grayscale(1) for light-text-on-dark modes
+   *   Tint overlay: positioned absolutely over the video, mix-blend-mode: multiply
+   *                 Multiply math: white × tint = tint, black × tint = black
+   *                 For white/black modes, tint is white (#fff) — effectively neutral
+   *   User brightness/contrast appended to base filter string
+   */
+  const MODES = [
+    {
+      name: 'Yellow on Black',
+      invert: true,
+      tint: '#ffff00',
+      iconFill: '#ffff00',
+      iconStroke: '#ffff00',
+    },
+    {
+      name: 'Black on Yellow',
+      invert: false,
+      tint: '#ffff00',
+      iconFill: '#000000',
+      iconStroke: '#ffff00',
+    },
+    {
+      name: 'Chartreuse on Black',
+      invert: true,
+      tint: 'chartreuse',
+      iconFill: 'chartreuse',
+      iconStroke: 'chartreuse',
+    },
+    {
+      name: 'Black on Chartreuse',
+      invert: false,
+      tint: 'chartreuse',
+      iconFill: '#000000',
+      iconStroke: 'chartreuse',
+    },
+    {
+      name: 'White on Black',
+      invert: true,
+      tint: '#ffffff',   /* white × anything = that color — neutral for white-on-black */
+      iconFill: '#ffffff',
+      iconStroke: '#ffffff',
+    },
+    {
+      name: 'Black on White',
+      invert: false,
+      tint: '#ffffff',
+      iconFill: '#000000',
+      iconStroke: '#ffffff',
+    },
+  ];
+
+  const BRIGHT = [
+    { bright: 1.0, cont: 1.0 },
+    { bright: 1.5, cont: 1.5 },
+    { bright: 2.5, cont: 2.5 },
+    { bright: 4.0, cont: 3.5 },
+  ];
+
+  const ZOOM_STEP = 0.5;
+  const ZOOM_MAX  = 8;
+
+  let mIdx = 0, bIdx = 0, zoom = 1;
+
+  const video        = document.getElementById('camera');
+  const noCamera     = document.getElementById('no-camera');
+  const tintOverlay  = document.getElementById('tint-overlay');
+  const modeName     = document.getElementById('mode-name');
+  const zoomBadge    = document.getElementById('zoom-badge');
+  const modeCircle   = document.getElementById('mode-circle');
+  const brightCircle = document.getElementById('bright-circle');
+  const brightSvg    = document.getElementById('bright-svg');
+
+  /* Camera — request highest available rear resolution */
+  navigator.mediaDevices
+    .getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width:  { ideal: 3840 },
+        height: { ideal: 2160 },
+      },
+      audio: false,
+    })
+    .then(stream => { video.srcObject = stream; })
+    .catch(() => { noCamera.style.display = 'flex'; });
+
+  function render() {
+    const m = MODES[mIdx];
+    const b = BRIGHT[bIdx];
+
+    const baseFilter = m.invert ? 'invert(1) grayscale(1)' : 'grayscale(1)';
+    video.style.filter    = `${baseFilter} brightness(${b.bright}) contrast(${b.cont})`;
+    video.style.transform = `scale(${zoom})`;
+
+    tintOverlay.style.background = m.tint;
+
+    modeName.textContent  = m.name;
+    zoomBadge.textContent = zoom + '×';
+
+    modeCircle.setAttribute('fill',   m.iconFill);
+    modeCircle.setAttribute('stroke', m.iconStroke);
+
+    brightCircle.setAttribute('fill', bIdx >= 2 ? '#fff' : 'none');
+    brightSvg.style.strokeWidth = bIdx === 3 ? '2.8' : '2.2';
+  }
+
+  window.nextMode   = () => { mIdx = (mIdx + 1) % MODES.length;  render(); };
+  window.nextBright = () => { bIdx = (bIdx + 1) % BRIGHT.length; render(); };
+
+  window.zoomIn = () => {
+    if (zoom < ZOOM_MAX) {
+      zoom = parseFloat(Math.min(ZOOM_MAX, zoom + ZOOM_STEP).toFixed(1));
+      render();
+    }
+  };
+
+  window.zoomOut = () => {
+    if (zoom > 1) {
+      zoom = parseFloat(Math.max(1, zoom - ZOOM_STEP).toFixed(1));
+      render();
+    }
+  };
+
+  render();
+}());
+</script>
+</body>
+</html>
