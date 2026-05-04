@@ -65,15 +65,21 @@
     overflow: hidden;
     background: #000;
     isolation: isolate;
+    touch-action: none;
   }
 
-  video {
+  video, #camera-canvas {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
     transform-origin: center center;
     display: block;
   }
+
+  #camera-canvas { display: none; }
+  #viewfinder.canvas-tier #camera-canvas { display: block; }
 
   #tint-overlay {
     position: absolute;
@@ -187,6 +193,7 @@
 <!-- Viewfinder: video + tint overlay, both inside isolation context -->
 <div id="viewfinder">
   <video id="camera" autoplay playsinline muted></video>
+  <canvas id="camera-canvas"></canvas>
   <div id="tint-overlay"></div>
   <div id="no-camera">Camera not available. Please allow camera access.</div>
 </div>
@@ -239,119 +246,244 @@
   'use strict';
 
   const MODES = [
-    {
-      name: 'Natural Color',
-      naturalColor: true,
-      tint: '#ffffff',
-      iconFill: '#00ffff',
-      iconStroke: '#00ffff',
-    },
-    {
-      name: 'Yellow on Black',
-      invert: true,
-      tint: '#ffff00',
-      iconFill: '#ffff00',
-      iconStroke: '#ffff00',
-    },
-    {
-      name: 'Black on Yellow',
-      invert: false,
-      tint: '#ffff00',
-      iconFill: '#000000',
-      iconStroke: '#ffff00',
-    },
-    {
-      name: 'Green on Black',
-      invert: true,
-      tint: '#7fff00',
-      iconFill: '#7fff00',
-      iconStroke: '#7fff00',
-    },
-    {
-      name: 'Black on Green',
-      invert: false,
-      tint: '#7fff00',
-      iconFill: '#000000',
-      iconStroke: '#7fff00',
-    },
-    {
-      name: 'White on Black',
-      invert: true,
-      tint: '#ffffff',
-      iconFill: '#ffffff',
-      iconStroke: '#ffffff',
-    },
-    {
-      name: 'Black on White',
-      invert: false,
-      tint: '#ffffff',
-      iconFill: '#000000',
-      iconStroke: '#ffffff',
-    },
+    { name: 'Natural Color', naturalColor: true, tint: '#ffffff', iconFill: '#00ffff', iconStroke: '#00ffff' },
+    { name: 'Yellow on Black', invert: true,  tint: '#ffff00', iconFill: '#ffff00', iconStroke: '#ffff00' },
+    { name: 'Black on Yellow', invert: false, tint: '#ffff00', iconFill: '#000000', iconStroke: '#ffff00' },
+    { name: 'Green on Black',  invert: true,  tint: '#7fff00', iconFill: '#7fff00', iconStroke: '#7fff00' },
+    { name: 'Black on Green',  invert: false, tint: '#7fff00', iconFill: '#000000', iconStroke: '#7fff00' },
+    { name: 'White on Black',  invert: true,  tint: '#ffffff', iconFill: '#ffffff', iconStroke: '#ffffff' },
+    { name: 'Black on White',  invert: false, tint: '#ffffff', iconFill: '#000000', iconStroke: '#ffffff' },
   ];
 
   const BRIGHT = [
-    { cont: 3.0 },
-    { cont: 2.0 },
-    { cont: 1.5 },
-    { cont: 1.0 },
-    { cont: 5.0 },
-    { cont: 4.0 },
+    { cont: 3.0 }, { cont: 2.0 }, { cont: 1.5 },
+    { cont: 1.0 }, { cont: 5.0 }, { cont: 4.0 },
   ];
 
-  const ZOOM_LEVELS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6];
+  const DEFAULT_LEVELS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6];
+  const STORAGE_KEY = 'mmagnifier';
 
-  let modeIndex = 0, brightIndex = 0, zoomIndex = 0;
+  const video       = document.getElementById('camera');
+  const canvas      = document.getElementById('camera-canvas');
+  const ctx         = canvas.getContext('2d');
+  const viewfinder  = document.getElementById('viewfinder');
+  const noCamera    = document.getElementById('no-camera');
+  const tintOverlay = document.getElementById('tint-overlay');
+  const modeLabel   = document.getElementById('mode-label');
+  const zoomLabel   = document.getElementById('zoom-label');
+  const brightLabel = document.getElementById('bright-label');
+  const modeCircle  = document.getElementById('mode-circle');
 
-  const video        = document.getElementById('camera');
-  const noCamera     = document.getElementById('no-camera');
-  const tintOverlay  = document.getElementById('tint-overlay');
-  const modeLabel    = document.getElementById('mode-label');
-  const zoomLabel    = document.getElementById('zoom-label');
-  const brightLabel  = document.getElementById('bright-label');
-  const modeCircle   = document.getElementById('mode-circle');
-  const brightCircle = document.getElementById('bright-circle');
+  const state = { modeIndex: 0, brightIndex: 0, zoom: 1 };
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    if (Number.isInteger(saved.modeIndex) && saved.modeIndex >= 0 && saved.modeIndex < MODES.length) state.modeIndex = saved.modeIndex;
+    if (Number.isInteger(saved.brightIndex) && saved.brightIndex >= 0 && saved.brightIndex < BRIGHT.length) state.brightIndex = saved.brightIndex;
+    if (typeof saved.zoom === 'number' && saved.zoom >= 1) state.zoom = saved.zoom;
+  } catch (_) {}
 
-  navigator.mediaDevices
-    .getUserMedia({
-      video: {
-        facingMode: { ideal: 'environment' },
-        width:  { ideal: 3840 },
-        height: { ideal: 2160 },
-      },
-      audio: false,
-    })
-    .then(stream => { video.srcObject = stream; })
-    .catch(() => { noCamera.style.display = 'flex'; });
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
+  }
+
+  let zoomLevels = DEFAULT_LEVELS.slice();
+  let maxZoom = 6;
+  let zoomMode = 'css';   // 'native' | 'canvas' | 'css'
+  let track = null;
+  let zoomCaps = null;
+  let supportsPOI = false;
+  let streamW = 0, streamH = 0;
+  let focusRevertTimer = null;
+
+  navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: { ideal: 'environment' },
+      width:  { ideal: 3840 },
+      height: { ideal: 2160 },
+      focusMode: { ideal: 'continuous' },
+    },
+    audio: false,
+  })
+  .then(stream => {
+    video.srcObject = stream;
+    track = stream.getVideoTracks()[0];
+
+    const caps = (track.getCapabilities && track.getCapabilities()) || {};
+    const settings = (track.getSettings && track.getSettings()) || {};
+    streamW = settings.width  || 1920;
+    streamH = settings.height || 1080;
+    supportsPOI = 'pointsOfInterest' in caps;
+
+    if (caps.zoom && typeof caps.zoom.max === 'number') {
+      zoomMode = 'native';
+      zoomCaps = caps.zoom;
+      maxZoom = Math.min(6, caps.zoom.max);
+    } else {
+      zoomMode = 'canvas';
+      const vw = Math.max(viewfinder.clientWidth,  1);
+      const vh = Math.max(viewfinder.clientHeight, 1);
+      const resBound = Math.min(streamW / vw, streamH / vh);
+      maxZoom = Math.max(1, Math.min(6, resBound));
+      startCanvasLoop();
+    }
+
+    zoomLevels = DEFAULT_LEVELS.filter(v => v <= maxZoom + 0.001);
+    if (zoomLevels.length === 0 || zoomLevels[zoomLevels.length - 1] < maxZoom - 0.05) {
+      zoomLevels.push(Math.round(maxZoom * 10) / 10);
+    }
+
+    state.zoom = clamp(state.zoom, 1, maxZoom);
+    render();
+  })
+  .catch(() => { noCamera.style.display = 'flex'; });
+
+  function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
+  function fmtZoom(z) { return (Math.round(z * 10) / 10) + '×'; }
+
+  function startCanvasLoop() {
+    viewfinder.classList.add('canvas-tier');
+    const dpr = window.devicePixelRatio || 1;
+    function resize() {
+      canvas.width  = viewfinder.clientWidth  * dpr;
+      canvas.height = viewfinder.clientHeight * dpr;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    function draw() {
+      if (video.readyState >= 2 && streamW && streamH) {
+        const cw = canvas.width, ch = canvas.height;
+        const tA = cw / ch, sA = streamW / streamH;
+        let sw, sh;
+        if (sA > tA) { sh = streamH;             sw = sh * tA; }
+        else         { sw = streamW;             sh = sw / tA; }
+        sw /= state.zoom;
+        sh /= state.zoom;
+        const sx = (streamW - sw) / 2;
+        const sy = (streamH - sh) / 2;
+        ctx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch);
+      }
+      schedule();
+    }
+    function schedule() {
+      if (typeof video.requestVideoFrameCallback === 'function') {
+        video.requestVideoFrameCallback(draw);
+      } else {
+        requestAnimationFrame(draw);
+      }
+    }
+    schedule();
+  }
+
+  function applyNativeZoom() {
+    if (!track || !zoomCaps) return;
+    const z = clamp(state.zoom, zoomCaps.min, zoomCaps.max);
+    track.applyConstraints({ advanced: [{ zoom: z }] }).catch(() => {});
+  }
 
   function render() {
-    const m = MODES[modeIndex];
-    const b = BRIGHT[brightIndex];
-    const zoom = ZOOM_LEVELS[zoomIndex];
+    const m = MODES[state.modeIndex];
+    const b = BRIGHT[state.brightIndex];
 
-    let baseFilter;
-    if (m.naturalColor) {
-      baseFilter = '';
+    let base;
+    if (m.naturalColor) base = '';
+    else base = m.invert ? 'invert(1) grayscale(1) brightness(1.1)' : 'grayscale(1) brightness(0.8)';
+    const filterValue = base ? `${base} contrast(${b.cont})` : `contrast(${b.cont})`;
+
+    if (zoomMode === 'canvas') {
+      canvas.style.filter = filterValue;
+      video.style.filter = '';
+      video.style.transform = '';
+    } else if (zoomMode === 'native') {
+      video.style.filter = filterValue;
+      canvas.style.filter = '';
+      video.style.transform = '';
+      applyNativeZoom();
     } else {
-      baseFilter = m.invert ? 'invert(1) grayscale(1) brightness(1.1)' : 'grayscale(1) brightness(0.8)';
+      video.style.filter = filterValue;
+      canvas.style.filter = '';
+      video.style.transform = `scale(${state.zoom})`;
     }
-    
-    video.style.filter = baseFilter ? `${baseFilter} contrast(${b.cont})` : `contrast(${b.cont})`;
-    video.style.transform = `scale(${zoom})`;
 
     tintOverlay.style.background = m.tint;
 
-    modeLabel.textContent = m.name;
-    zoomLabel.textContent = zoom + '×';
+    modeLabel.textContent   = m.name;
+    zoomLabel.textContent   = fmtZoom(state.zoom);
     brightLabel.textContent = b.cont + '×';
 
-    modeCircle.setAttribute('fill', m.iconFill);
+    modeCircle.setAttribute('fill',   m.iconFill);
     modeCircle.setAttribute('stroke', m.iconStroke);
+
+    save();
   }
 
-  window.nextMode = () => { modeIndex = (modeIndex + 1) % MODES.length; render(); };
-  window.nextBright = () => { brightIndex = (brightIndex + 1) % BRIGHT.length; render(); };
-  window.cycleZoom = () => { zoomIndex = (zoomIndex + 1) % ZOOM_LEVELS.length; render(); };
+  window.nextMode   = () => { state.modeIndex   = (state.modeIndex   + 1) % MODES.length;  render(); };
+  window.nextBright = () => { state.brightIndex = (state.brightIndex + 1) % BRIGHT.length; render(); };
+  window.cycleZoom  = () => {
+    const next = zoomLevels.find(v => v > state.zoom + 0.001);
+    state.zoom = (next != null) ? next : zoomLevels[0];
+    render();
+  };
+
+  // ── Pinch-to-zoom + tap-to-focus ─────────────────────────────
+  let pinching = false;
+  let pinchStartDist = 0;
+  let pinchStartZoom = 1;
+  let tapStart = null;
+
+  function dist(a, b) {
+    return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  }
+
+  viewfinder.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      pinching = true;
+      pinchStartDist = dist(e.touches[0], e.touches[1]);
+      pinchStartZoom = state.zoom;
+      tapStart = null;
+      e.preventDefault();
+    } else if (e.touches.length === 1 && !pinching) {
+      const t = e.touches[0];
+      tapStart = { x: t.clientX, y: t.clientY, time: Date.now() };
+    }
+  }, { passive: false });
+
+  viewfinder.addEventListener('touchmove', (e) => {
+    if (pinching && e.touches.length === 2) {
+      const d = dist(e.touches[0], e.touches[1]);
+      const ratio = d / (pinchStartDist || d);
+      state.zoom = clamp(pinchStartZoom * ratio, 1, maxZoom);
+      render();
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  viewfinder.addEventListener('touchend', (e) => {
+    if (e.touches.length < 2 && pinching) {
+      pinching = false;
+      tapStart = null;
+      return;
+    }
+    if (e.touches.length === 0 && tapStart && supportsPOI && track) {
+      const t = e.changedTouches[0];
+      const dt = Date.now() - tapStart.time;
+      const dx = Math.abs(t.clientX - tapStart.x);
+      const dy = Math.abs(t.clientY - tapStart.y);
+      if (dt < 500 && dx < 10 && dy < 10) {
+        const rect = viewfinder.getBoundingClientRect();
+        const x = clamp((t.clientX - rect.left) / rect.width,  0, 1);
+        const y = clamp((t.clientY - rect.top)  / rect.height, 0, 1);
+        track.applyConstraints({
+          advanced: [{ pointsOfInterest: [{ x, y }], focusMode: 'single-shot' }],
+        }).catch(() => {});
+        if (focusRevertTimer) clearTimeout(focusRevertTimer);
+        focusRevertTimer = setTimeout(() => {
+          track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+        }, 2000);
+      }
+    }
+    tapStart = null;
+  });
 
   render();
 }());
