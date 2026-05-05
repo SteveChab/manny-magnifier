@@ -158,8 +158,10 @@
   .btn {
     flex: 1;
     display: flex;
+    flex-direction: row;
     align-items: center;
     justify-content: center;
+    gap: 10px;
     border: none;
     border-right: 2px solid #fff;
     background: #000;
@@ -175,16 +177,7 @@
   .btn:last-child { border-right: none; }
   .btn:active     { background: #181818; }
 
-  /* Inner content wrapper — rotates to match physical orientation */
-  .btn-inner {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 10px;
-    transition: transform 0.3s ease;
-  }
-
-  .btn-inner svg {
+  .btn svg {
     width: 38px;
     height: 38px;
     display: block;
@@ -202,42 +195,25 @@
   }
 
   /* Compact mode — used when the bar has 4 buttons (native app) */
-  #btn-bar.compact .btn { padding: 8px 4px; }
-  #btn-bar.compact .btn-inner {
-    flex-direction: column;
-    gap: 4px;
-  }
-  #btn-bar.compact .btn-inner svg {
-    width: 28px;
-    height: 28px;
-  }
-  #btn-bar.compact .btn-label {
-    font-size: 12px;
-    text-align: center;
-  }
+  #btn-bar.compact .btn { padding: 8px 4px; flex-direction: column; gap: 4px; }
+  #btn-bar.compact .btn svg { width: 28px; height: 28px; }
+  #btn-bar.compact .btn-label { font-size: 12px; text-align: center; }
 
-  /* Orientation rotation — works even when OS rotation lock is on.
-     screen.orientation.angle reads the physical device angle, not the viewport.
-     Buttons stay at the bottom; only the inner content rotates for readability.
-     We also switch to column layout + compact sizing so the rotated content
-     fits within the 72px button height (44px column ≪ 72px, no clipping). */
-  body.orient-cw .btn-inner,
-  body.orient-ccw .btn-inner {
-    flex-direction: column;
-    gap: 4px;
-  }
-  body.orient-cw .btn-inner svg,
-  body.orient-ccw .btn-inner svg {
-    width: 28px;
-    height: 28px;
-  }
-  body.orient-cw .btn-label,
-  body.orient-ccw .btn-label {
-    font-size: 12px;
-    text-align: center;
-  }
-  body.orient-cw  .btn-inner { transform: rotate(90deg); }   /* 270° physical */
-  body.orient-ccw .btn-inner { transform: rotate(-90deg); }  /* 90° physical */
+  /* Landscape: controls pivot to a vertical strip on the right */
+  body.landscape #viewfinder     { bottom: 0; right: var(--btn-bar-height); }
+  body.landscape #controls       { top: 0; bottom: 0; left: auto; right: 0;
+                                    width: var(--btn-bar-height); height: auto; }
+  body.landscape #btn-bar        { height: 100%; flex-direction: column;
+                                    border-top: none; border-left: 2px solid #fff; }
+  body.landscape .btn            { border-right: none; border-bottom: 2px solid #fff;
+                                    flex-direction: column; gap: 4px; padding: 8px 4px; }
+  body.landscape .btn:last-child { border-bottom: none; }
+  body.landscape .btn svg        { width: 28px; height: 28px; }
+  body.landscape .btn-label      { font-size: 11px; text-align: center; }
+
+  /* Logo → bottom-left, zoom pill → top-left in landscape */
+  body.landscape .heading    { top: auto; bottom: 0.7rem; }
+  body.landscape #zoom-pill  { right: auto; left: 0.75rem; }
 </style>
 </head>
 <body>
@@ -273,53 +249,45 @@
 
     <!-- Color mode cycle -->
     <button class="btn" onclick="nextMode()" aria-label="Change color mode">
-      <div class="btn-inner">
-        <svg id="mode-icon" viewBox="0 0 24 24" aria-hidden="true">
-          <circle id="mode-circle" cx="12" cy="12" r="8.5" stroke-width="2.2"/>
-        </svg>
-        <span class="btn-label" id="mode-label">Color</span>
-      </div>
+      <svg id="mode-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <circle id="mode-circle" cx="12" cy="12" r="8.5" stroke-width="2.2"/>
+      </svg>
+      <span class="btn-label" id="mode-label">Color</span>
     </button>
 
     <!-- Brightness cycle -->
     <button class="btn" onclick="nextBright()" aria-label="Change brightness">
-      <div class="btn-inner">
-        <svg id="bright-svg" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
-          <circle id="bright-circle" cx="12" cy="12" r="4" fill="none"/>
-          <line x1="12"   y1="2"    x2="12"   y2="4.5"/>
-          <line x1="12"   y1="19.5" x2="12"   y2="22"/>
-          <line x1="2"    y1="12"   x2="4.5"  y2="12"/>
-          <line x1="19.5" y1="12"   x2="22"   y2="12"/>
-          <line x1="4.93" y1="4.93"  x2="6.7"   y2="6.7"/>
-          <line x1="17.3" y1="17.3"  x2="19.07" y2="19.07"/>
-          <line x1="4.93" y1="19.07" x2="6.7"   y2="17.3"/>
-          <line x1="17.3" y1="6.7"   x2="19.07" y2="4.93"/>
-        </svg>
-        <span class="btn-label" id="bright-label">1×</span>
-      </div>
+      <svg id="bright-svg" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+        <circle id="bright-circle" cx="12" cy="12" r="4" fill="none"/>
+        <line x1="12"   y1="2"    x2="12"   y2="4.5"/>
+        <line x1="12"   y1="19.5" x2="12"   y2="22"/>
+        <line x1="2"    y1="12"   x2="4.5"  y2="12"/>
+        <line x1="19.5" y1="12"   x2="22"   y2="12"/>
+        <line x1="4.93" y1="4.93"  x2="6.7"   y2="6.7"/>
+        <line x1="17.3" y1="17.3"  x2="19.07" y2="19.07"/>
+        <line x1="4.93" y1="19.07" x2="6.7"   y2="17.3"/>
+        <line x1="17.3" y1="6.7"   x2="19.07" y2="4.93"/>
+      </svg>
+      <span class="btn-label" id="bright-label">1×</span>
     </button>
 
     <!-- Light (flashlight) — native only, hidden in browser -->
     <button class="btn" id="torch-btn" onclick="toggleTorch()" aria-label="Toggle light" style="display:none">
-      <div class="btn-inner">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M9 3 L15 3 L17 7 L17 9 L7 9 L7 7 Z"/>
-          <rect x="7" y="9" width="10" height="12" rx="0.5"/>
-          <line x1="12" y1="13" x2="12" y2="16"/>
-        </svg>
-        <span class="btn-label" id="torch-label">Light</span>
-      </div>
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M9 3 L15 3 L17 7 L17 9 L7 9 L7 7 Z"/>
+        <rect x="7" y="9" width="10" height="12" rx="0.5"/>
+        <line x1="12" y1="13" x2="12" y2="16"/>
+      </svg>
+      <span class="btn-label" id="torch-label">Light</span>
     </button>
 
     <!-- Freeze frame — native only, hidden in browser -->
     <button class="btn" id="freeze-btn" onclick="freezeFrame()" aria-label="Freeze frame" style="display:none">
-      <div class="btn-inner">
-        <svg id="freeze-icon" viewBox="0 0 24 24" fill="#fff" stroke="#fff" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="6"  y="4" width="4" height="16" rx="0.5"/>
-          <rect x="14" y="4" width="4" height="16" rx="0.5"/>
-        </svg>
-        <span class="btn-label" id="freeze-label">Freeze</span>
-      </div>
+      <svg id="freeze-icon" viewBox="0 0 24 24" fill="#fff" stroke="#fff" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="6"  y="4" width="4" height="16" rx="0.5"/>
+        <rect x="14" y="4" width="4" height="16" rx="0.5"/>
+      </svg>
+      <span class="btn-label" id="freeze-label">Freeze</span>
     </button>
 
   </div>
@@ -464,20 +432,21 @@
     }
 
     function draw() {
-      if (!frozen && video.readyState >= 2 && streamW && streamH) {
+      const vw = video.videoWidth, vh = video.videoHeight;
+      if (!frozen && video.readyState >= 2 && vw && vh) {
         const cw = canvas.width, ch = canvas.height;
-        const tA = cw / ch, sA = streamW / streamH;
+        const tA = cw / ch, sA = vw / vh;
         let sw, sh;
-        if (sA > tA) { sh = streamH;             sw = sh * tA; }
-        else         { sw = streamW;             sh = sw / tA; }
+        if (sA > tA) { sh = vh; sw = sh * tA; }
+        else         { sw = vw; sh = sw / tA; }
         // Native zoom pre-zooms up to its hardware cap; canvas crops the rest.
         // cropFactor = 1 when zoom ≤ nativeCap (canvas is lossless, native handles it all).
         // cropFactor > 1 when zoom > nativeCap (canvas crops from the already-zoomed stream).
         const nativeZ = zoomCaps ? clamp(state.zoom, zoomCaps.min, zoomCaps.max) : 1;
         sw /= (state.zoom / nativeZ);
         sh /= (state.zoom / nativeZ);
-        const sx = (streamW - sw) / 2;
-        const sy = (streamH - sh) / 2;
+        const sx = (vw - sw) / 2;
+        const sy = (vh - sh) / 2;
         ctx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch);
       }
       schedule();
@@ -656,36 +625,14 @@
     });
   }
 
-  // ── Orientation-aware button rotation ───────────────────────
-  // screen.orientation.angle reflects physical device rotation even when the
-  // OS rotation lock is ON — because we're reading the sensor/API directly,
-  // not waiting for the viewport to change. Buttons stay at the bottom;
-  // only their inner content rotates so it's readable when held sideways.
-  function applyOrientation() {
-    const angle =
-      (typeof screen.orientation !== 'undefined' ? screen.orientation.angle : null) ??
-      (typeof window.orientation !== 'undefined' ? window.orientation      : 0);
-    const a = ((angle % 360) + 360) % 360;  // normalise to 0–359
-
-    // Only rotate button content when the device is physically sideways BUT the
-    // viewport hasn't actually rotated (i.e. OS rotation lock is ON).
-    // When lock is OFF the viewport rotates itself, so button content is already
-    // upright — adding a CSS rotation here would double-rotate it.
-    const viewportIsLandscape = window.innerWidth > window.innerHeight;
-    const deviceIsLandscape   = (a === 90 || a === 270);
-
-    document.body.classList.remove('orient-cw', 'orient-ccw');
-    if (deviceIsLandscape && !viewportIsLandscape) {
-      if (a === 90)  document.body.classList.add('orient-ccw'); // phone tilted CCW
-      if (a === 270) document.body.classList.add('orient-cw');  // phone tilted CW
-    }
+  // ── Landscape layout ─────────────────────────────────────────
+  // When viewport is wider than tall, toggle the 'landscape' class on body.
+  // CSS handles button rotation and sizing from there.
+  function updateOrientation() {
+    document.body.classList.toggle('landscape', window.innerWidth > window.innerHeight);
   }
-  if (typeof screen.orientation !== 'undefined') {
-    screen.orientation.addEventListener('change', applyOrientation);
-  }
-  window.addEventListener('orientationchange', applyOrientation);
-  window.addEventListener('resize', applyOrientation); // catches viewport reflow after rotation
-  applyOrientation();
+  window.addEventListener('resize', updateOrientation);
+  updateOrientation();
 
   // Freeze frame: stop the canvas draw loop so users can read steady text.
   // The video stream keeps running; `frozen` simply stops drawImage() each frame.
