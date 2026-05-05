@@ -1,5 +1,5 @@
 {
   "appId": "com.mmagnifier.app",
   "appName": "mmagnifier",
-  "webDir": "../web"
+  "webDir": "www"
 }

@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "sync": "mkdir -p www && cp ../index.html ../mmagnifier-logo.svg www/ && LANG=en_US.UTF-8 PATH=\"/opt/homebrew/lib/ruby/gems/4.0.0/bin:$PATH\" npx cap sync",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

@@ -33,11 +33,14 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v5
+      - name: Prepare web files
+        run: |
+          mkdir -p /tmp/web-deploy
+          rsync -av --exclude=native/ --exclude=.github/ --exclude=.git/ . /tmp/web-deploy/
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload entire repository
-          path: '.'
+          path: '/tmp/web-deploy'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
