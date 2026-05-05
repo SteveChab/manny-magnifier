@@ -27,15 +27,42 @@ The app works in both directions. Point it at something nearby to magnify it; po
 - **Large, simple controls** — 2 buttons with icon + label, designed for easy use with reduced visual acuity
 - **Settings persistence** — last-used color mode, brightness, and zoom level are remembered across sessions
 
+### Native App Features (v1.0)
+
+The paid iOS and Android apps include two additional controls not available in the browser:
+
+- **Torch** — toggle the flashlight for illuminating close-up subjects
+- **Capture** — freeze a frame and share or save it to Photos
+
 ## Technical Architecture
 
 ### Technology Stack
 
-- **Vanilla HTML/CSS/JavaScript** — no frameworks, no build step
+- **Vanilla HTML/CSS/JavaScript** — no frameworks, no build step (web layer)
+- **Ionic Capacitor** — native iOS/Android wrapper
 - **CSS filters + blend modes** for color transformations
 - **getUserMedia API** for camera access
 - **MediaStreamTrack.applyConstraints** for native camera zoom
-- **Planned:** Capacitor wrapper for native iOS/Android apps
+
+### Repository Structure
+
+```
+mmagnifier/
+├── web/                          # Free web app — served via GitHub Pages
+│   ├── index.html                # Entire app: camera, filters, controls
+│   ├── mmagnifier-logo.svg       # App icon / favicon
+│   ├── logo-wordmark.svg         # Full wordmark
+│   └── README.md                 # This file
+├── native/                       # Paid native app — Capacitor wrapper
+│   ├── package.json
+│   ├── capacitor.config.json     # webDir: "../web"
+│   ├── ios/                      # Xcode project
+│   └── android/                  # Android Studio project
+└── assets/
+    └── logo-wordmark.ai          # Illustrator source
+```
+
+The web and native apps share a single `index.html`. Native-only features (torch, freeze frame) are gated behind `Capacitor.isNativePlatform()` and invisible in the browser.
 
 ### Zoom Pipeline
 
@@ -47,7 +74,7 @@ The app uses a three-tier zoom strategy, auto-detected at startup:
 
 3. **Tier C — CSS scale** (last resort): Legacy fallback for older browsers only.
 
-The ZOOM_LEVELS array is built dynamically from device capabilities so the app never promises a zoom level it can't deliver crisply.
+The zoom level array is built dynamically from device capabilities so the app never promises a level it can't deliver crisply.
 
 ### How Color Modes Work
 
@@ -72,71 +99,48 @@ This approach avoids the red hue shift that comes from using `sepia()` filters.
 
 The app requests `focusMode: { ideal: 'continuous' }` in the initial camera constraints, keeping the AF loop active as you move the phone. On devices that expose `pointsOfInterest`, a single tap on the viewfinder triggers single-shot focus on that spot, then reverts to continuous after 2 seconds.
 
-## Project Structure
-
-```
-mmagnifier/
-├── web/
-│   ├── index.html            # Main app (camera, filters, controls)
-│   ├── mmagnifier-logo.svg   # App icon / favicon
-│   ├── logo-wordmark.svg     # Full wordmark (not used in app UI)
-│   └── README.md             # This file
-└── assets/
-    └── logo-wordmark.ai      # Illustrator source
-```
-
-The entire app is a single HTML file with embedded CSS and JavaScript. No external dependencies, no npm packages, no build process.
-
 ## Running Locally
 
-1. Serve the file over HTTPS (required for camera access):
-   ```bash
-   python3 -m http.server 8000
-   # Then expose over HTTPS with ngrok or similar
-   ngrok http 8000
-   ```
+### Web app
+```bash
+python3 -m http.server 8000
+# Expose over HTTPS for camera access:
+ngrok http 8000
+```
+Open on a mobile browser and allow camera access.
 
-2. Open in a mobile browser and allow camera access when prompted.
+### Native app (requires Xcode + Android Studio)
+```bash
+cd native
+npx cap sync          # copy latest web files into native projects
+npx cap open ios      # open in Xcode
+npx cap open android  # open in Android Studio
+```
 
 ## Deployment
 
-### Web Version (Current)
+### Web Version — free, always will be
 
-Deploy to any static host:
-- **GitHub Pages** (free, recommended)
-- Netlify
-- Vercel
-- Cloudflare Pages
+Deploy `web/` to any static host:
+- **GitHub Pages** (recommended)
+- Netlify / Vercel / Cloudflare Pages
 
-The web version is and will remain free.
+### Native Apps — paid
 
-### Native Apps (Planned)
-
-The paid iOS and Android versions will use **Ionic Capacitor** to wrap the web app:
-
-```bash
-npm install @capacitor/core @capacitor/cli
-npx cap init
-npx cap add ios
-npx cap add android
-```
-
-Native-only features planned:
-- OCR + Text-to-Speech (read printed text aloud)
-- Torch/flashlight control
-- No browser chrome (true full-screen)
-- Save frames to Photos
-- Macro lens access (iPhone 13 Pro+ / recent Android flagships)
-
-This differentiation justifies the paid tier and meets App Store requirements for approval.
+iOS and Android apps are built with Ionic Capacitor using `web/` as the web layer. The native apps are distributed through the App Store and Google Play at a one-time price.
 
 ## Controls
 
+### Web + native
 - **Color button** (left) — Cycles through 5 color modes
 - **Brightness button** (right) — Cycles through 6 contrast levels (1× to 5×)
-- **Zoom pill** (top-right) — Tap to cycle 11 zoom levels (1× to 6×)
+- **Zoom pill** (top-right) — Tap to cycle zoom levels (1× to 6×)
 - **Pinch gesture** (viewfinder) — Continuous zoom
 - **Tap gesture** (viewfinder) — Tap-to-focus (on supported devices)
+
+### Native app only
+- **Torch button** — Toggle flashlight on/off
+- **Capture button** — Freeze current frame and share/save to Photos
 
 All buttons show their current state in the label beside the icon.
 
@@ -165,24 +169,22 @@ All Rights Reserved © 2025
 
 This code is source-available for review but not open source. You may view it, but you may not copy, modify, distribute, or use it for commercial purposes without explicit permission.
 
-The web version at the deployment URL is free to use.
+The web version is free to use. The native apps are paid.
 
-## Why "mmagnifier"?
+## Roadmap
 
-The "m" prefix is short for "manny" (a personal reference). The app emulates the functionality of dedicated handheld video magnifiers — and digital binoculars — at a fraction of the cost.
+### Native app v1.1
+- OCR → Text-to-Speech (read printed text aloud)
 
-## Future Enhancements
+### Native app v1.2
+- Macro lens access (iPhone 13 Pro+ / recent Android flagships)
 
-**Confirmed for native apps:**
-- OCR → TTS pipeline using `@capacitor-community/text-recognition` + `@capacitor-community/text-to-speech`
-- Freeze frame capture
-- Torch/flashlight toggle
-- Macro lens access
-
-**Under consideration:**
+### Under consideration
 - Pan while zoomed (drag to move around)
 - Landscape mode optimization (buttons on right edge)
-- Optical zoom lens selector (ultra-wide / main / telephoto) for multi-lens devices
+- Optical zoom lens selector (ultra-wide / main / telephoto)
+- Bookmarklet for browser injection
+- Desktop browser extension
 
 ## Contact
 

@@ -1,0 +1,28 @@
+PODS:
+  - Capacitor (8.3.1):
+    - CapacitorCordova
+  - CapacitorCordova (8.3.1)
+  - CapawesomeCapacitorTorch (8.0.1):
+    - Capacitor
+
+DEPENDENCIES:
+  - "Capacitor (from `../../node_modules/@capacitor/ios`)"
+  - "CapacitorCordova (from `../../node_modules/@capacitor/ios`)"
+  - "CapawesomeCapacitorTorch (from `../../node_modules/@capawesome/capacitor-torch`)"
+
+EXTERNAL SOURCES:
+  Capacitor:
+    :path: "../../node_modules/@capacitor/ios"
+  CapacitorCordova:
+    :path: "../../node_modules/@capacitor/ios"
+  CapawesomeCapacitorTorch:
+    :path: "../../node_modules/@capawesome/capacitor-torch"
+
+SPEC CHECKSUMS:
+  Capacitor: 46dbaa89c1d1cd121b9fc2dc839c1f39cc49e326
+  CapacitorCordova: 9010447fe25e869705fcf525e5f490facde87608
+  CapawesomeCapacitorTorch: d118c3fe55e7472061f02d4775f08899fde73a32
+
+PODFILE CHECKSUM: 4b2ffcfeb70b8f7d8ec30cf1aea0f077678cb807
+
+COCOAPODS: 1.16.2

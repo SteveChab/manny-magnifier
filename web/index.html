@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; media-src blob: mediastream:; img-src 'self' data:;">
+<link rel="icon" type="image/svg+xml" href="mmagnifier-logo.svg">
+<title>mmagnifier \ High contrast magnifying glass and binoculars for your phone. Easily zoom to see labels, distant objects, and fine detail.</title>
+<meta name="description" content="Turn your phone into a powerful handheld magnifying glass for easy reading. Zoom text, labels, and fine detail. Switch between high-contrast color modes. Simple, large controls. Easy to use. Good for people with low vision or dyslexia.">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --serif: 'Times New Roman', Times, Georgia, serif;
+    --btn-bar-height: 72px;
+    --controls-height: var(--btn-bar-height);
+  }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  .heading {
+    z-index: 1000;
+    position: fixed;
+    top: 0.7rem;
+    left: 0.75rem;
+    line-height: 0;
+    margin: 0;
+  }
+
+  .logo-icon {
+    width: 36px;
+    height: auto;
+    display: block;
+  }
+
+  #zoom-pill {
+    position: fixed;
+    top: 0.7rem;
+    right: 0.75rem;
+    z-index: 1000;
+    background: #000;
+    border: 1.5px solid #fff;
+    border-radius: 999px;
+    padding: 5px 14px;
+    color: #fff;
+    font-family: var(--serif);
+    font-size: 16px;
+    font-weight: bold;
+    line-height: 1;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  /* ── Viewfinder ── */
+  #viewfinder {
+    position: fixed;
+    inset: 0;
+    bottom: var(--controls-height);
+    overflow: hidden;
+    background: #000;
+    isolation: isolate;
+    touch-action: none;
+  }
+
+  video, #camera-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform-origin: center center;
+    display: block;
+    background: #000;
+  }
+
+  /* Hide the video element until the camera stream is attached.
+     opacity:0 keeps autoplay/srcObject working; the play-button overlay
+     never renders because it has nothing to paint over. */
+  #camera { opacity: 0; }
+
+  /* Suppress any remaining WebView media-control chrome, just in case */
+  video::-webkit-media-controls,
+  video::-webkit-media-controls-enclosure,
+  video::-webkit-media-controls-overlay-play-button,
+  video::-internal-media-controls-overlay-cast-button { display: none !important; }
+
+  #camera-canvas { display: none; }
+  #viewfinder.canvas-tier #camera-canvas { display: block; }
+
+  #tint-overlay {
+    position: absolute;
+    inset: 0;
+    mix-blend-mode: multiply;
+    pointer-events: none;
+  }
+
+  #no-camera {
+    display: none;
+    position: absolute;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 14px;
+    color: #fff;
+    background: #000;
+    font-family: var(--serif);
+    font-size: 22px;
+    font-weight: bold;
+    text-align: center;
+    padding: 2rem;
+    line-height: 1.5;
+    cursor: pointer;
+    z-index: 5;
+  }
+  #no-camera:active { background: #181818; }
+
+  /* ── Controls ── */
+  #controls {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: var(--controls-height);
+    z-index: 20;
+  }
+
+  #btn-bar {
+    height: var(--btn-bar-height);
+    display: flex;
+    background: #000;
+    border-top: 2px solid #fff;
+  }
+
+  .btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-right: 2px solid #fff;
+    background: #000;
+    cursor: pointer;
+    padding: 10px 12px;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    transition: background 0.07s;
+    overflow: hidden;
+  }
+
+  .btn:last-child { border-right: none; }
+  .btn:active     { background: #181818; }
+
+  /* Inner content wrapper — rotates to match physical orientation */
+  .btn-inner {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    transition: transform 0.3s ease;
+  }
+
+  .btn-inner svg {
+    width: 38px;
+    height: 38px;
+    display: block;
+    flex-shrink: 0;
+  }
+
+  .btn-label {
+    color: #fff;
+    font-family: var(--serif);
+    font-size: 15px;
+    font-weight: bold;
+    line-height: 1;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  /* Compact mode — used when the bar has 4 buttons (native app) */
+  #btn-bar.compact .btn { padding: 8px 4px; }
+  #btn-bar.compact .btn-inner {
+    flex-direction: column;
+    gap: 4px;
+  }
+  #btn-bar.compact .btn-inner svg {
+    width: 28px;
+    height: 28px;
+  }
+  #btn-bar.compact .btn-label {
+    font-size: 12px;
+    text-align: center;
+  }
+
+  /* Orientation rotation — works even when OS rotation lock is on.
+     screen.orientation.angle reads the physical device angle, not the viewport.
+     Buttons stay at the bottom; only the inner content rotates for readability.
+     We also switch to column layout + compact sizing so the rotated content
+     fits within the 72px button height (44px column ≪ 72px, no clipping). */
+  body.orient-cw .btn-inner,
+  body.orient-ccw .btn-inner {
+    flex-direction: column;
+    gap: 4px;
+  }
+  body.orient-cw .btn-inner svg,
+  body.orient-ccw .btn-inner svg {
+    width: 28px;
+    height: 28px;
+  }
+  body.orient-cw .btn-label,
+  body.orient-ccw .btn-label {
+    font-size: 12px;
+    text-align: center;
+  }
+  body.orient-cw  .btn-inner { transform: rotate(90deg); }   /* 270° physical */
+  body.orient-ccw .btn-inner { transform: rotate(-90deg); }  /* 90° physical */
+</style>
+</head>
+<body>
+    <h1 class="heading">
+      <span class="sr-only">mmagnifier</span>
+      <svg class="logo-icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="124.49" height="112.17" viewBox="0 0 124.49 112.17">
+        <circle style="fill:#ff0" cx="61.52" cy="56.09" r="56.09"/>
+        <path d="M40.48,48.01c2.15,0,3.96.75,5.45,2.25,1.49,1.5,2.23,3.31,2.23,5.43s-.75,3.91-2.25,5.4c-1.5,1.49-3.31,2.23-5.43,2.23s-3.91-.74-5.4-2.23-2.23-3.29-2.23-5.4.74-3.92,2.23-5.43c1.49-1.5,3.29-2.25,5.4-2.25Z"/>
+        <path d="M40.48,63.57c-2.17,0-4.05-.77-5.58-2.3s-2.3-3.4-2.3-5.58.77-4.06,2.3-5.6c1.53-1.54,3.4-2.33,5.58-2.33s4.1.78,5.63,2.33c1.53,1.55,2.3,3.43,2.3,5.6s-.78,4.05-2.33,5.58c-1.55,1.53-3.43,2.3-5.6,2.3ZM40.48,48.26c-2.03,0-3.79.73-5.22,2.18-1.43,1.45-2.16,3.21-2.16,5.25s.73,3.79,2.16,5.22,3.19,2.16,5.22,2.16,3.8-.73,5.25-2.16c1.45-1.43,2.18-3.19,2.18-5.22s-.73-3.8-2.16-5.25c-1.43-1.45-3.2-2.18-5.27-2.18Z"/>
+        <path d="M84.01,63.57c-2.17,0-4.06-.77-5.6-2.3-1.54-1.53-2.33-3.4-2.33-5.58s.77-4.06,2.3-5.6c1.53-1.54,3.42-2.33,5.63-2.33s4.05.78,5.58,2.33h0c1.53,1.55,2.3,3.43,2.3,5.6s-.77,4.05-2.3,5.58-3.4,2.3-5.58,2.3ZM84.01,48.26c-2.07,0-3.84.73-5.27,2.18-1.43,1.45-2.16,3.21-2.16,5.25s.73,3.79,2.18,5.22c1.45,1.43,3.21,2.16,5.25,2.16s3.79-.73,5.22-2.16,2.16-3.19,2.16-5.22-.73-3.8-2.16-5.25h0c-1.43-1.45-3.19-2.18-5.22-2.18Z"/>
+        <path d="M89.41,50.26c1.49,1.5,2.23,3.31,2.23,5.43s-.74,3.91-2.23,5.4-3.29,2.23-5.4,2.23-3.92-.74-5.43-2.23c-1.5-1.49-2.25-3.29-2.25-5.4s.74-3.92,2.23-5.43c1.49-1.5,3.3-2.25,5.45-2.25s3.91.75,5.4,2.25Z"/>
+        <path d="M124.49,38.32l-3.73-3.33-14.44,16.17c-2.46-8.56-10.35-14.86-19.69-14.86-10.46,0-19.09,7.87-20.33,18h-8.1c-1.24-10.13-9.88-18-20.33-18-9.34,0-17.23,6.29-19.69,14.86L3.73,34.99l-3.73,3.33,17.42,19.49c.53,10.83,9.49,19.49,20.45,19.49s19.09-7.87,20.33-18h8.1c1.24,10.13,9.88,18,20.33,18s19.92-8.66,20.45-19.49l17.42-19.49ZM37.86,72.3c-8.55,0-15.5-6.95-15.5-15.5s6.95-15.5,15.5-15.5,15.5,6.95,15.5,15.5-6.95,15.5-15.5,15.5ZM86.63,72.3c-8.55,0-15.5-6.95-15.5-15.5s6.95-15.5,15.5-15.5,15.5,6.95,15.5,15.5-6.95,15.5-15.5,15.5Z"/>
+        <rect x="26.85" y="23.46" width="24.32" height="5" transform="translate(-4.62 8.86) rotate(-12.24)"/>
+        <rect x="83.63" y="13.48" width="5" height="22.73" transform="translate(27.46 92.62) rotate(-65.21)"/>
+        <polygon points="53.02 83.66 49.32 87.02 57.03 95.49 72.56 95.53 72.57 90.53 59.25 90.49 53.02 83.66"/>
+      </svg>
+    </h1>
+    <button id="zoom-pill" onclick="cycleZoom()" aria-label="Change zoom level">
+      <span id="zoom-label">1×</span>
+    </button>
+
+<!-- Viewfinder: video + tint overlay, both inside isolation context -->
+<div id="viewfinder">
+  <video id="camera" autoplay playsinline muted></video>
+  <canvas id="camera-canvas"></canvas>
+  <div id="tint-overlay"></div>
+  <div id="no-camera" onclick="requestCamera()" role="button" tabindex="0">Tap to Allow Camera</div>
+</div>
+
+<!-- Controls: 3 buttons with labels underneath -->
+<div id="controls">
+  <div id="btn-bar" role="toolbar" aria-label="Magnifier controls">
+
+    <!-- Color mode cycle -->
+    <button class="btn" onclick="nextMode()" aria-label="Change color mode">
+      <div class="btn-inner">
+        <svg id="mode-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle id="mode-circle" cx="12" cy="12" r="8.5" stroke-width="2.2"/>
+        </svg>
+        <span class="btn-label" id="mode-label">Color</span>
+      </div>
+    </button>
+
+    <!-- Brightness cycle -->
+    <button class="btn" onclick="nextBright()" aria-label="Change brightness">
+      <div class="btn-inner">
+        <svg id="bright-svg" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+          <circle id="bright-circle" cx="12" cy="12" r="4" fill="none"/>
+          <line x1="12"   y1="2"    x2="12"   y2="4.5"/>
+          <line x1="12"   y1="19.5" x2="12"   y2="22"/>
+          <line x1="2"    y1="12"   x2="4.5"  y2="12"/>
+          <line x1="19.5" y1="12"   x2="22"   y2="12"/>
+          <line x1="4.93" y1="4.93"  x2="6.7"   y2="6.7"/>
+          <line x1="17.3" y1="17.3"  x2="19.07" y2="19.07"/>
+          <line x1="4.93" y1="19.07" x2="6.7"   y2="17.3"/>
+          <line x1="17.3" y1="6.7"   x2="19.07" y2="4.93"/>
+        </svg>
+        <span class="btn-label" id="bright-label">1×</span>
+      </div>
+    </button>
+
+    <!-- Light (flashlight) — native only, hidden in browser -->
+    <button class="btn" id="torch-btn" onclick="toggleTorch()" aria-label="Toggle light" style="display:none">
+      <div class="btn-inner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M9 3 L15 3 L17 7 L17 9 L7 9 L7 7 Z"/>
+          <rect x="7" y="9" width="10" height="12" rx="0.5"/>
+          <line x1="12" y1="13" x2="12" y2="16"/>
+        </svg>
+        <span class="btn-label" id="torch-label">Light</span>
+      </div>
+    </button>
+
+    <!-- Freeze frame — native only, hidden in browser -->
+    <button class="btn" id="freeze-btn" onclick="freezeFrame()" aria-label="Freeze frame" style="display:none">
+      <div class="btn-inner">
+        <svg id="freeze-icon" viewBox="0 0 24 24" fill="#fff" stroke="#fff" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="6"  y="4" width="4" height="16" rx="0.5"/>
+          <rect x="14" y="4" width="4" height="16" rx="0.5"/>
+        </svg>
+        <span class="btn-label" id="freeze-label">Freeze</span>
+      </div>
+    </button>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const MODES = [
+    { name: 'Color',        naturalColor: true, tint: '#ffffff', iconFill: '#00ffff', iconStroke: '#00ffff' },
+    { name: 'Yellow/Black', invert: true,  tint: '#ffff00', iconFill: '#ffff00', iconStroke: '#ffff00' },
+    { name: 'Black/Yellow', invert: false, tint: '#ffff00', iconFill: '#000000', iconStroke: '#ffff00' },
+    { name: 'White/Black',  invert: true,  tint: '#ffffff', iconFill: '#ffffff', iconStroke: '#ffffff' },
+    { name: 'Black/White',  invert: false, tint: '#ffffff', iconFill: '#000000', iconStroke: '#ffffff' },
+  ];
+
+  const BRIGHT = [
+    { cont: 1.0 }, { cont: 2.0 }, { cont: 3.0 }, { cont: 4.0 },
+  ];
+
+  const DEFAULT_LEVELS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6];
+  const STORAGE_KEY = 'mmagnifier';
+
+  const video       = document.getElementById('camera');
+  const canvas      = document.getElementById('camera-canvas');
+  const ctx         = canvas.getContext('2d');
+  const viewfinder  = document.getElementById('viewfinder');
+  const noCamera    = document.getElementById('no-camera');
+  const tintOverlay = document.getElementById('tint-overlay');
+  const modeLabel   = document.getElementById('mode-label');
+  const zoomLabel   = document.getElementById('zoom-label');
+  const brightLabel = document.getElementById('bright-label');
+  const modeCircle  = document.getElementById('mode-circle');
+
+  const state = { modeIndex: 0, brightIndex: 0, zoom: 1 };
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    if (Number.isInteger(saved.modeIndex) && saved.modeIndex >= 0 && saved.modeIndex < MODES.length) state.modeIndex = saved.modeIndex;
+    if (Number.isInteger(saved.brightIndex) && saved.brightIndex >= 0 && saved.brightIndex < BRIGHT.length) state.brightIndex = saved.brightIndex;
+    if (typeof saved.zoom === 'number' && saved.zoom >= 1) state.zoom = saved.zoom;
+  } catch (_) {}
+
+  // Debounced save — coalesces rapid writes (e.g. pinch-zoom at 60fps)
+  // so localStorage is written at most once per 300ms of inactivity.
+  let saveTimer;
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
+    }, 300);
+  }
+
+  let zoomLevels = DEFAULT_LEVELS.slice();
+  let maxZoom = 6;
+  let zoomMode = null;   // 'native' | 'canvas' — set once camera stream resolves
+  let track = null;
+  let zoomCaps = null;
+  let supportsPOI = false;
+  let streamW = 0, streamH = 0;
+  let focusRevertTimer = null;
+  let frozen = false;
+
+  let cameraStarted = false;
+
+  window.requestCamera = function () {
+    // Stop any existing stream before requesting a new one.
+    // Prevents orphaned tracks keeping the camera indicator lit.
+    if (track) { try { track.stop(); } catch (_) {} track = null; }
+    if (video.srcObject) {
+      try { video.srcObject.getTracks().forEach(t => t.stop()); } catch (_) {}
+      video.srcObject = null;
+    }
+
+    noCamera.style.display = 'none';
+    navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width:  { ideal: 3840 },
+        height: { ideal: 2160 },
+        focusMode: { ideal: 'continuous' },
+      },
+      audio: false,
+    })
+    .then(stream => {
+      video.srcObject = stream;
+      track = stream.getVideoTracks()[0];
+
+      const caps = (track.getCapabilities && track.getCapabilities()) || {};
+      const settings = (track.getSettings && track.getSettings()) || {};
+      streamW = settings.width  || 1920;
+      streamH = settings.height || 1080;
+      supportsPOI = 'pointsOfInterest' in caps;
+
+      if (caps.zoom && typeof caps.zoom.max === 'number') {
+        zoomMode = 'native';
+        zoomCaps = caps.zoom;
+        maxZoom = Math.min(6, caps.zoom.max);
+        video.style.opacity = '1';   // reveal video — stream is live, no placeholder
+      } else {
+        zoomMode = 'canvas';
+        const vw = Math.max(viewfinder.clientWidth,  1);
+        const vh = Math.max(viewfinder.clientHeight, 1);
+        const resBound = Math.min(streamW / vw, streamH / vh);
+        maxZoom = Math.max(1, Math.min(6, resBound));
+        if (!cameraStarted) startCanvasLoop();
+        // canvas covers video; video stays opacity:0 as data source only
+      }
+      cameraStarted = true;
+
+      zoomLevels = DEFAULT_LEVELS.filter(v => v <= maxZoom + 0.001);
+      if (zoomLevels.length === 0 || zoomLevels[zoomLevels.length - 1] < maxZoom - 0.05) {
+        zoomLevels.push(Math.round(maxZoom * 10) / 10);
+      }
+
+      state.zoom = clamp(state.zoom, 1, maxZoom);
+      render();
+    })
+    .catch(() => { noCamera.style.display = 'flex'; });
+  };
+
+  window.requestCamera();
+
+  function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
+  function fmtZoom(z) { return (Math.round(z * 10) / 10) + '×'; }
+
+  function startCanvasLoop() {
+    viewfinder.classList.add('canvas-tier');
+    const dpr = window.devicePixelRatio || 1;
+    function resize() {
+      const w = viewfinder.clientWidth  || window.innerWidth;
+      const h = viewfinder.clientHeight || (window.innerHeight - 72);
+      canvas.width  = w * dpr;
+      canvas.height = h * dpr;
+    }
+    resize();
+    // ResizeObserver fires reliably on viewport rotation in Capacitor WebViews;
+    // window 'resize' is the fallback for browsers that lack it.
+    if (typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(resize).observe(viewfinder);
+    } else {
+      window.addEventListener('resize', resize);
+    }
+
+    function draw() {
+      if (!frozen && video.readyState >= 2 && streamW && streamH) {
+        const cw = canvas.width, ch = canvas.height;
+        const tA = cw / ch, sA = streamW / streamH;
+        let sw, sh;
+        if (sA > tA) { sh = streamH;             sw = sh * tA; }
+        else         { sw = streamW;             sh = sw / tA; }
+        sw /= state.zoom;
+        sh /= state.zoom;
+        const sx = (streamW - sw) / 2;
+        const sy = (streamH - sh) / 2;
+        ctx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch);
+      }
+      schedule();
+    }
+    function schedule() {
+      if (typeof video.requestVideoFrameCallback === 'function') {
+        video.requestVideoFrameCallback(draw);
+      } else {
+        requestAnimationFrame(draw);
+      }
+    }
+    schedule();
+  }
+
+  function applyNativeZoom() {
+    if (!track || !zoomCaps) return;
+    const z = clamp(state.zoom, zoomCaps.min, zoomCaps.max);
+    track.applyConstraints({ advanced: [{ zoom: z }] }).catch(() => {});
+  }
+
+  function render() {
+    const m = MODES[state.modeIndex];
+    const b = BRIGHT[state.brightIndex];
+
+    let base;
+    if (m.naturalColor) base = '';
+    else base = m.invert ? 'invert(1) grayscale(1) brightness(1.1)' : 'grayscale(1) brightness(0.8)';
+    const filterValue = base ? `${base} contrast(${b.cont})` : `contrast(${b.cont})`;
+
+    if (zoomMode === 'canvas') {
+      canvas.style.filter = filterValue;
+      video.style.filter = '';
+    } else if (zoomMode === 'native') {
+      video.style.filter = filterValue;
+      canvas.style.filter = '';
+      applyNativeZoom();
+    }
+    // else: camera not yet started — nothing to filter yet
+
+    tintOverlay.style.background = m.tint;
+
+    modeLabel.textContent   = m.name;
+    zoomLabel.textContent   = fmtZoom(state.zoom);
+    brightLabel.textContent = b.cont + '×';
+
+    modeCircle.setAttribute('fill',   m.iconFill);
+    modeCircle.setAttribute('stroke', m.iconStroke);
+
+    save();
+  }
+
+  window.nextMode   = () => { state.modeIndex   = (state.modeIndex   + 1) % MODES.length;  render(); };
+  window.nextBright = () => { state.brightIndex = (state.brightIndex + 1) % BRIGHT.length; render(); };
+  window.cycleZoom  = () => {
+    const next = zoomLevels.find(v => v > state.zoom + 0.001);
+    state.zoom = (next != null) ? next : zoomLevels[0];
+    render();
+  };
+
+  // ── Pinch-to-zoom + tap-to-focus ─────────────────────────────
+  let pinching = false;
+  let pinchStartDist = 0;
+  let pinchStartZoom = 1;
+  let tapStart = null;
+
+  function dist(a, b) {
+    return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  }
+
+  viewfinder.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      pinching = true;
+      pinchStartDist = dist(e.touches[0], e.touches[1]);
+      pinchStartZoom = state.zoom;
+      tapStart = null;
+      e.preventDefault();
+    } else if (e.touches.length === 1 && !pinching) {
+      const t = e.touches[0];
+      tapStart = { x: t.clientX, y: t.clientY, time: Date.now() };
+    }
+  }, { passive: false });
+
+  viewfinder.addEventListener('touchmove', (e) => {
+    if (pinching && e.touches.length === 2) {
+      const d = dist(e.touches[0], e.touches[1]);
+      const ratio = d / (pinchStartDist || d);
+      state.zoom = clamp(pinchStartZoom * ratio, 1, maxZoom);
+      render();
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  viewfinder.addEventListener('touchend', (e) => {
+    if (e.touches.length < 2 && pinching) {
+      pinching = false;
+      tapStart = null;
+      return;
+    }
+    if (e.touches.length === 0 && tapStart && supportsPOI && track) {
+      const t = e.changedTouches[0];
+      const dt = Date.now() - tapStart.time;
+      const dx = Math.abs(t.clientX - tapStart.x);
+      const dy = Math.abs(t.clientY - tapStart.y);
+      if (dt < 500 && dx < 10 && dy < 10) {
+        const rect = viewfinder.getBoundingClientRect();
+        const x = clamp((t.clientX - rect.left) / rect.width,  0, 1);
+        const y = clamp((t.clientY - rect.top)  / rect.height, 0, 1);
+        track.applyConstraints({
+          advanced: [{ pointsOfInterest: [{ x, y }], focusMode: 'single-shot' }],
+        }).catch(() => {});
+        if (focusRevertTimer) clearTimeout(focusRevertTimer);
+        focusRevertTimer = setTimeout(() => {
+          track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+        }, 2000);
+      }
+    }
+    tapStart = null;
+  });
+
+  render();
+
+  // ── Native-only features (torch + freeze) ────────────────────
+  const isNative = typeof window.Capacitor !== 'undefined' && window.Capacitor.isNativePlatform();
+
+  if (isNative) {
+    document.getElementById('torch-btn').style.display  = 'flex';
+    document.getElementById('freeze-btn').style.display = 'flex';
+    document.getElementById('btn-bar').classList.add('compact');
+  }
+
+  let torchOn = false;
+  window.toggleTorch = async () => {
+    if (!isNative) return;
+    const nextState = !torchOn;
+    let success = false;
+
+    // Primary: use the live camera track's torch constraint.
+    // This works while the camera is open (no CameraAccessException conflict).
+    if (track) {
+      try {
+        await track.applyConstraints({ advanced: [{ torch: nextState }] });
+        success = true;
+      } catch (_) {}
+    }
+
+    // Fallback: Capacitor plugin (e.g. torch-only devices or when track unavailable)
+    if (!success) {
+      try {
+        const Torch = window.Capacitor?.Plugins?.Torch;
+        if (Torch) {
+          nextState ? await Torch.enable() : await Torch.disable();
+          success = true;
+        }
+      } catch (_) {}
+    }
+
+    if (success) {
+      torchOn = nextState;
+      document.getElementById('torch-label').textContent = torchOn ? 'Light On' : 'Light';
+      document.getElementById('torch-btn').style.background = torchOn ? '#222' : '';
+    }
+  };
+
+  // ── Page-visibility: release camera when backgrounded (web only) ──
+  // On native the OS suspends the WebView and handles this automatically.
+  // On web this frees the camera indicator light when the user switches tabs.
+  if (!isNative) {
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        if (track) { try { track.stop(); } catch (_) {} track = null; }
+        if (video.srcObject) {
+          try { video.srcObject.getTracks().forEach(t => t.stop()); } catch (_) {}
+          video.srcObject = null;
+          video.style.opacity = '0';
+        }
+      } else {
+        window.requestCamera();  // restart when tab becomes visible again
+      }
+    });
+  }
+
+  // ── Orientation-aware button rotation ───────────────────────
+  // screen.orientation.angle reflects physical device rotation even when the
+  // OS rotation lock is ON — because we're reading the sensor/API directly,
+  // not waiting for the viewport to change. Buttons stay at the bottom;
+  // only their inner content rotates so it's readable when held sideways.
+  function applyOrientation() {
+    const angle =
+      (typeof screen.orientation !== 'undefined' ? screen.orientation.angle : null) ??
+      (typeof window.orientation !== 'undefined' ? window.orientation      : 0);
+    const a = ((angle % 360) + 360) % 360;  // normalise to 0–359
+
+    // Only rotate button content when the device is physically sideways BUT the
+    // viewport hasn't actually rotated (i.e. OS rotation lock is ON).
+    // When lock is OFF the viewport rotates itself, so button content is already
+    // upright — adding a CSS rotation here would double-rotate it.
+    const viewportIsLandscape = window.innerWidth > window.innerHeight;
+    const deviceIsLandscape   = (a === 90 || a === 270);
+
+    document.body.classList.remove('orient-cw', 'orient-ccw');
+    if (deviceIsLandscape && !viewportIsLandscape) {
+      if (a === 90)  document.body.classList.add('orient-ccw'); // phone tilted CCW
+      if (a === 270) document.body.classList.add('orient-cw');  // phone tilted CW
+    }
+  }
+  if (typeof screen.orientation !== 'undefined') {
+    screen.orientation.addEventListener('change', applyOrientation);
+  }
+  window.addEventListener('orientationchange', applyOrientation);
+  window.addEventListener('resize', applyOrientation); // catches viewport reflow after rotation
+  applyOrientation();
+
+  // Freeze frame: pause the live view so users can read steady text.
+  // `frozen` is only committed after the pause/play succeeds to avoid a state
+  // where the flag says "frozen" but the video is still playing.
+  window.freezeFrame = () => {
+    const next = !frozen;
+    if (next) {
+      // Entering frozen state
+      let ok = true;
+      if (zoomMode !== 'canvas') { try { video.pause(); } catch (_) { ok = false; } }
+      if (ok) {
+        frozen = true;
+        document.getElementById('freeze-label').textContent = 'Resume';
+        document.getElementById('freeze-icon').innerHTML =
+          '<polygon points="6,4 6,20 20,12" />';
+        document.getElementById('freeze-btn').style.background = '#222';
+      }
+    } else {
+      // Leaving frozen state
+      frozen = false;
+      if (zoomMode !== 'canvas') { try { video.play(); } catch (_) {} }
+      document.getElementById('freeze-label').textContent = 'Freeze';
+      document.getElementById('freeze-icon').innerHTML =
+        '<rect x="6" y="4" width="4" height="16" rx="0.5"/><rect x="14" y="4" width="4" height="16" rx="0.5"/>';
+      document.getElementById('freeze-btn').style.background = '';
+    }
+  };
+
+}());
+</script>
+</body>
+</html>
