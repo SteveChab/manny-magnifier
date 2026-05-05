@@ -375,7 +375,7 @@
 
   let zoomLevels = DEFAULT_LEVELS.slice();
   let maxZoom = 6;
-  let zoomMode = null;   // 'native' | 'canvas' — set once camera stream resolves
+  let zoomMode = null;   // null until camera starts, then 'canvas'
   let track = null;
   let zoomCaps = null;
   let supportsPOI = false;
@@ -415,19 +415,18 @@
       supportsPOI = 'pointsOfInterest' in caps;
 
       if (caps.zoom && typeof caps.zoom.max === 'number') {
-        zoomMode = 'native';
-        zoomCaps = caps.zoom;
-        maxZoom = Math.min(6, caps.zoom.max);
-        video.style.opacity = '1';   // reveal video — stream is live, no placeholder
-      } else {
-        zoomMode = 'canvas';
-        const vw = Math.max(viewfinder.clientWidth,  1);
-        const vh = Math.max(viewfinder.clientHeight, 1);
-        const resBound = Math.min(streamW / vw, streamH / vh);
-        maxZoom = Math.max(1, Math.min(6, resBound));
-        if (!cameraStarted) startCanvasLoop();
-        // canvas covers video; video stays opacity:0 as data source only
+        zoomCaps = caps.zoom;  // used as a quality supplement — see canvas draw loop
       }
+      // Always canvas mode: canvas is the display layer, video stays hidden as data source.
+      // Native zoom (when available) pre-zooms the stream up to its hardware cap;
+      // the canvas crops any remaining factor. This gives the full stream-resolution
+      // zoom range regardless of the native cap, with better quality at low zoom levels.
+      zoomMode = 'canvas';
+      const vw = Math.max(viewfinder.clientWidth,  1);
+      const vh = Math.max(viewfinder.clientHeight, 1);
+      const resBound = Math.min(streamW / vw, streamH / vh);
+      maxZoom = Math.max(1, Math.min(6, resBound));
+      if (!cameraStarted) startCanvasLoop();
       cameraStarted = true;
 
       zoomLevels = DEFAULT_LEVELS.filter(v => v <= maxZoom + 0.001);
@@ -471,8 +470,12 @@
         let sw, sh;
         if (sA > tA) { sh = streamH;             sw = sh * tA; }
         else         { sw = streamW;             sh = sw / tA; }
-        sw /= state.zoom;
-        sh /= state.zoom;
+        // Native zoom pre-zooms up to its hardware cap; canvas crops the rest.
+        // cropFactor = 1 when zoom ≤ nativeCap (canvas is lossless, native handles it all).
+        // cropFactor > 1 when zoom > nativeCap (canvas crops from the already-zoomed stream).
+        const nativeZ = zoomCaps ? clamp(state.zoom, zoomCaps.min, zoomCaps.max) : 1;
+        sw /= (state.zoom / nativeZ);
+        sh /= (state.zoom / nativeZ);
         const sx = (streamW - sw) / 2;
         const sy = (streamH - sh) / 2;
         ctx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch);
@@ -507,10 +510,7 @@
     if (zoomMode === 'canvas') {
       canvas.style.filter = filterValue;
       video.style.filter = '';
-    } else if (zoomMode === 'native') {
-      video.style.filter = filterValue;
-      canvas.style.filter = '';
-      applyNativeZoom();
+      if (zoomCaps) applyNativeZoom();  // pre-zoom the stream for quality
     }
     // else: camera not yet started — nothing to filter yet
 
@@ -687,26 +687,16 @@
   window.addEventListener('resize', applyOrientation); // catches viewport reflow after rotation
   applyOrientation();
 
-  // Freeze frame: pause the live view so users can read steady text.
-  // `frozen` is only committed after the pause/play succeeds to avoid a state
-  // where the flag says "frozen" but the video is still playing.
+  // Freeze frame: stop the canvas draw loop so users can read steady text.
+  // The video stream keeps running; `frozen` simply stops drawImage() each frame.
   window.freezeFrame = () => {
-    const next = !frozen;
-    if (next) {
-      // Entering frozen state
-      let ok = true;
-      if (zoomMode !== 'canvas') { try { video.pause(); } catch (_) { ok = false; } }
-      if (ok) {
-        frozen = true;
-        document.getElementById('freeze-label').textContent = 'Resume';
-        document.getElementById('freeze-icon').innerHTML =
-          '<polygon points="6,4 6,20 20,12" />';
-        document.getElementById('freeze-btn').style.background = '#222';
-      }
+    frozen = !frozen;
+    if (frozen) {
+      document.getElementById('freeze-label').textContent = 'Resume';
+      document.getElementById('freeze-icon').innerHTML =
+        '<polygon points="6,4 6,20 20,12" />';
+      document.getElementById('freeze-btn').style.background = '#222';
     } else {
-      // Leaving frozen state
-      frozen = false;
-      if (zoomMode !== 'canvas') { try { video.play(); } catch (_) {} }
       document.getElementById('freeze-label').textContent = 'Freeze';
       document.getElementById('freeze-icon').innerHTML =
         '<rect x="6" y="4" width="4" height="16" rx="0.5"/><rect x="14" y="4" width="4" height="16" rx="0.5"/>';
