@@ -14,6 +14,12 @@ native/*.keystore
 # Android — generated/installed artifacts
 native/android/.gradle/
 native/android/app/build/
+native/android/local.properties
+# Android Studio IDE files (local-only, no value in public repo)
+# Use glob (not trailing /) so the negation below can re-include the nested .gitignore
+native/android/.idea/*
+# Keep the nested .gitignore so workspace.xml (device serial) stays excluded
+!native/android/.idea/.gitignore
 
 # Node
 native/node_modules/
