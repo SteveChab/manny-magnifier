@@ -15,16 +15,17 @@ The app works in both directions. Point it at something nearby to magnify it; po
 
 - **Live camera magnification** — 1× to 6× zoom (11 steps), using the camera's native zoom where available for maximum sharpness
 - **5 color modes** optimized for different vision needs:
-  - Natural Color (unfiltered camera)
-  - Yellow on Black
-  - Black on Yellow
-  - White on Black
-  - Black on White
-- **6 contrast levels** — cycles from 1× to 5× in steps (1, 1.5, 2, 3, 4, 5)
+  - Color (unfiltered camera)
+  - Yellow/Black
+  - Black/Yellow
+  - White/Black
+  - Black/White
+- **4 contrast levels** — cycles 1×, 2×, 3×, 4×
 - **Zoom pill** — compact zoom indicator in the top-right corner; tap it to cycle levels
 - **Pinch-to-zoom** — continuous zoom gesture on the viewfinder
 - **Tap-to-focus** — single tap on the viewfinder locks focus to that point (on supported devices)
-- **Large, simple controls** — 2 buttons with icon + label, designed for easy use with reduced visual acuity
+- **Landscape support** — buttons automatically rotate to match device orientation, even with OS rotation lock on
+- **Large, simple controls** — buttons with icon + label, designed for easy use with reduced visual acuity
 - **Settings persistence** — last-used color mode, brightness, and zoom level are remembered across sessions
 
 ### Native App Features (v1.0)
@@ -32,7 +33,7 @@ The app works in both directions. Point it at something nearby to magnify it; po
 The paid iOS and Android apps include two additional controls not available in the browser:
 
 - **Torch** — toggle the flashlight for illuminating close-up subjects
-- **Capture** — freeze a frame and share or save it to Photos
+- **Freeze** — pause the live camera feed; tap again to resume
 
 ## Technical Architecture
 
@@ -42,37 +43,36 @@ The paid iOS and Android apps include two additional controls not available in t
 - **Ionic Capacitor** — native iOS/Android wrapper
 - **CSS filters + blend modes** for color transformations
 - **getUserMedia API** for camera access
-- **MediaStreamTrack.applyConstraints** for native camera zoom
+- **MediaStreamTrack.applyConstraints** for native camera zoom and torch control
 
 ### Repository Structure
 
+The git repository root is the web app itself, with the native project nested inside it.
+
 ```
-mmagnifier/
-├── web/                          # Free web app — served via GitHub Pages
-│   ├── index.html                # Entire app: camera, filters, controls
-│   ├── mmagnifier-logo.svg       # App icon / favicon
-│   ├── logo-wordmark.svg         # Full wordmark
-│   └── README.md                 # This file
-├── native/                       # Paid native app — Capacitor wrapper
-│   ├── package.json
-│   ├── capacitor.config.json     # webDir: "../web"
-│   ├── ios/                      # Xcode project
-│   └── android/                  # Android Studio project
-└── assets/
-    └── logo-wordmark.ai          # Illustrator source
+mmagnifier/                           # Git root — served via GitHub Pages
+├── index.html                        # Entire app: camera, filters, controls
+├── mmagnifier-logo.svg               # App icon / favicon
+├── README.md                         # This file
+├── .github/
+│   └── workflows/static.yml          # GitHub Pages deployment (excludes native/)
+└── native/                           # Paid native app — Capacitor wrapper
+    ├── package.json                  # npm run sync — copies web files + cap sync
+    ├── capacitor.config.json         # webDir: "www"
+    ├── www/                          # Auto-generated staging dir (gitignored)
+    ├── ios/                          # Xcode project (git-tracked)
+    └── android/                      # Android Studio project (git-tracked)
 ```
 
-The web and native apps share a single `index.html`. Native-only features (torch, freeze frame) are gated behind `Capacitor.isNativePlatform()` and invisible in the browser.
+The web and native apps share a single `index.html`. Native-only features (torch, freeze) are gated behind `Capacitor.isNativePlatform()` and invisible in the browser. `native/` is excluded from the GitHub Pages deployment via rsync in the workflow.
 
 ### Zoom Pipeline
 
-The app uses a three-tier zoom strategy, auto-detected at startup:
+The app uses a two-tier zoom strategy, auto-detected at startup:
 
 1. **Tier A — Native track zoom** (preferred): `track.applyConstraints({ advanced: [{ zoom }] })` drives the camera's actual sensor/lens zoom for maximum sharpness. Available on iOS Safari 17.4+ and modern Android Chrome.
 
 2. **Tier B — Canvas crop from high-res stream** (fallback): Captures a 4K stream and crops it in a `<canvas>` using `requestVideoFrameCallback`. Because the source is already high-resolution, this stays sharp well past what CSS upscaling can achieve.
-
-3. **Tier C — CSS scale** (last resort): Legacy fallback for older browsers only.
 
 The zoom level array is built dynamically from device capabilities so the app never promises a level it can't deliver crisply.
 
@@ -83,7 +83,7 @@ The app uses a two-layer approach to achieve color modes without hue distortion:
 1. **Base layer** (`<video>` or `<canvas>`) with CSS filters:
    - `grayscale(1)` for dark-text modes
    - `invert(1) grayscale(1)` for light-text-on-dark modes
-   - No filter for Natural Color mode
+   - No filter for Color mode
    - User-controlled `contrast()` appended
 
 2. **Tint overlay** positioned absolutely over the base layer:
@@ -94,6 +94,10 @@ The app uses a two-layer approach to achieve color modes without hue distortion:
 3. **Isolation context** on the viewfinder container (`isolation: isolate`) scopes the blend mode so it doesn't affect UI controls.
 
 This approach avoids the red hue shift that comes from using `sepia()` filters.
+
+### Torch Implementation
+
+The torch uses `track.applyConstraints({ advanced: [{ torch: bool }] })` as the primary method — this works while the camera is already open via WebRTC. The Capacitor torch plugin is used as a fallback. Calling the plugin directly (which uses `CameraManager.setTorchMode()`) can throw a `CameraAccessException` on Android when the camera is already in use by the web stream.
 
 ### Autofocus
 
@@ -112,35 +116,35 @@ Open on a mobile browser and allow camera access.
 ### Native app (requires Xcode + Android Studio)
 ```bash
 cd native
-npx cap sync          # copy latest web files into native projects
+npm run sync          # copy latest web files into www/, then cap sync
 npx cap open ios      # open in Xcode
 npx cap open android  # open in Android Studio
 ```
+
+After editing `index.html`, run `npm run sync` from `native/` to push changes into both native projects.
 
 ## Deployment
 
 ### Web Version — free, always will be
 
-Deploy `web/` to any static host:
-- **GitHub Pages** (recommended)
-- Netlify / Vercel / Cloudflare Pages
+The repository root is the web app. Push to `main` and GitHub Actions deploys automatically. Can also be self-hosted on any static host (Netlify, Vercel, Cloudflare Pages, etc.).
 
 ### Native Apps — paid
 
-iOS and Android apps are built with Ionic Capacitor using `web/` as the web layer. The native apps are distributed through the App Store and Google Play at a one-time price.
+iOS and Android apps are built with Ionic Capacitor. The native projects live in `native/` and use `native/www/` as the web asset staging directory (auto-populated by `npm run sync`). The native apps are distributed through the App Store and Google Play at a one-time price.
 
 ## Controls
 
 ### Web + native
 - **Color button** (left) — Cycles through 5 color modes
-- **Brightness button** (right) — Cycles through 6 contrast levels (1× to 5×)
+- **Brightness button** (right) — Cycles through 4 contrast levels (1×, 2×, 3×, 4×)
 - **Zoom pill** (top-right) — Tap to cycle zoom levels (1× to 6×)
 - **Pinch gesture** (viewfinder) — Continuous zoom
 - **Tap gesture** (viewfinder) — Tap-to-focus (on supported devices)
 
 ### Native app only
 - **Torch button** — Toggle flashlight on/off
-- **Capture button** — Freeze current frame and share/save to Photos
+- **Freeze button** — Pause/resume the live camera feed
 
 All buttons show their current state in the label beside the icon.
 
@@ -165,7 +169,7 @@ The UI itself is designed to be readable even when viewed through the app's own 
 
 ## License
 
-All Rights Reserved © 2025
+All Rights Reserved © 2025–2026
 
 This code is source-available for review but not open source. You may view it, but you may not copy, modify, distribute, or use it for commercial purposes without explicit permission.
 
@@ -181,7 +185,6 @@ The web version is free to use. The native apps are paid.
 
 ### Under consideration
 - Pan while zoomed (drag to move around)
-- Landscape mode optimization (buttons on right edge)
 - Optical zoom lens selector (ultra-wide / main / telephoto)
 - Bookmarklet for browser injection
 - Desktop browser extension
