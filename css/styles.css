@@ -1,0 +1,318 @@
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --serif: 'Times New Roman', Times, Georgia, serif;
+  --white: #fff;
+  --off-white: #eed;
+  --muted: #bba;
+  --accent: #ff0d;
+  --max-w: 1560px;
+  --page-margin: 20vw;
+}
+
+html, body {
+  background: #000;
+  color: var(--off-white);
+  font-family: var(--serif);
+  font-size: 18px;
+  line-height: 1.65;
+}
+
+.inner {
+  max-width: var(--max-w);
+  margin: 0 var(--page-margin);
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--white);
+}
+
+/* ── HERO ── */
+.hero {
+  padding: 2.5rem 0 1rem;
+}
+
+.hero .inner {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  overflow: hidden;
+}
+
+.mmagnifier {
+  margin-left: -24px;
+  max-width: 100%;
+}
+
+.tagline {
+  font-size: 24px;
+  color: var(--off-white);
+  text-align: right;
+}
+
+/* ── PHONE MOCKUP ── */
+.phone-section {
+  position: relative;
+  height: 50vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.phone {
+  width: 260px;
+  height: 545px;
+  border: 2px solid var(--white);
+  border-radius: 40px;
+  background: #060606;
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  will-change: transform;
+  box-shadow: #636 0 0 10vw 0;
+}
+
+.phone-notch {
+  width: 52px;
+  height: 5px;
+  background: var(--white);
+  border-radius: 3px;
+  margin: 12px auto 0;
+  opacity: 0.3;
+}
+
+/* Replace .phone-placeholder with:
+   <img src="screenshot.jpg" class="phone-screen" alt="mmagnifier app screenshot">
+   once you have device screenshots. */
+.phone-placeholder {
+  width: 100%;
+  height: calc(100% - 29px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #060606;
+}
+
+.phone-placeholder svg {
+  width: 88px;
+  height: auto;
+  opacity: 0.45;
+}
+
+.phone-screen {
+  display: block;
+  width: 100%;
+  height: calc(100% - 29px);
+  object-fit: cover;
+}
+
+/* ── FEATURES ── */
+.features {
+  padding: 2.5rem 0;
+  position: relative;
+  z-index: 10;
+  background-color: #000;
+  border-top: 1px solid var(--white);
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 calc(var(--page-margin) / 2);
+}
+
+.feature-col h2 {
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--white);
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--white);
+  margin-bottom: 0.75rem;
+}
+
+.feature-col h2 .label {
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-left: 0.5em;
+}
+
+.feature-col ul {
+  list-style: none;
+  padding: 0;
+  margin-bottom: 1.5em;
+}
+
+.feature-col li {
+  font-size: 20px;
+  color: var(--off-white);
+  padding: 0.2rem 0;
+  line-height: 1.35;
+}
+
+.feature-col li.plus {
+  color: var(--white);
+  font-style: italic;
+  margin-bottom: 0.15rem;
+}
+
+/* ── CTA BUTTONS (under each feature column) ── */
+.play-btn {
+  display: inline-block;
+  margin-left: -13px; /* compensate for badge's built-in padding */
+}
+
+.play-btn img {
+  display: block;
+  height: 60px;
+  width: auto;
+}
+
+.web-link {
+  display: inline-block;
+  border: 2px solid var(--accent);
+  border-radius: 999px;
+  padding: 0.55rem 1.5rem;
+  color: var(--accent);
+  text-decoration: none;
+  font-family: var(--serif);
+}
+
+.web-link:hover {
+  background: #181818;
+}
+
+/* ── PRIVACY NOTE ── */
+.privacy-note {
+  padding: 2rem 0;
+  font-size: 0.9rem;
+  color: var(--off-white);
+}
+
+.privacy-note a {
+  color: var(--off-white);
+  text-decoration: underline;
+}
+
+/* ── FOOTER ── */
+footer {
+  padding: 1.5rem 0 3rem;
+  color: var(--muted);
+}
+
+.footer-inner {
+  display: flex;
+  gap: 2rem;
+  font-size: 0.875rem;
+}
+
+footer a {
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+/* ── PRIVACY PAGE ── */
+.nav-back {
+  padding: 1.25rem 0;
+  font-size: 0.95rem;
+}
+
+.nav-back a {
+  color: var(--off-white);
+  text-decoration: none;
+}
+
+.nav-back a:hover { color: var(--white); }
+
+article {
+  padding: 2.5rem 0 4rem;
+}
+
+article h1 {
+  font-size: 1.75rem;
+  color: var(--white);
+  font-weight: bold;
+  margin-bottom: 0.4rem;
+}
+
+.updated {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin-bottom: 2rem;
+}
+
+article h2 {
+  font-size: 1.1rem;
+  color: var(--white);
+  font-weight: bold;
+  border: none;
+  padding: 0;
+  margin-top: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+article p {
+  margin-bottom: 1rem;
+}
+
+article ul {
+  padding: 0;
+  margin-bottom: 1rem;
+  margin-left: 1em;
+}
+
+article li {
+  font-size: 1rem;
+  padding: 0.15rem 0;
+}
+
+article a {
+  color: var(--off-white);
+  text-decoration: underline;
+}
+
+article a:hover { color: var(--white); }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 900px) {
+  :root {
+    --page-margin: 10vw;
+  }
+}
+
+@media (max-width: 500px) {
+  .hero .inner,
+  .features-grid {
+    grid-template-columns: 1fr;
+    margin: 0 var(--page-margin);
+  }
+  
+  .features-grid {
+    gap: 1.75rem 0;
+  }
+
+  .mmagnifier {
+    margin: 0;
+  }
+
+  .hero {
+    padding-top: 0;
+  }
+
+  .tagline {
+    font-size: 18px;
+    text-align: center;
+  }
+
+  .phone-section {
+    height: 480px;
+    margin: 3vh 0;
+  }
+
+  .phone {
+    width: 220px;
+    height: 460px;
+  }
+}
