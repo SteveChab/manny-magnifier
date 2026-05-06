@@ -163,7 +163,7 @@
     justify-content: center;
     gap: 10px;
     border: none;
-    border-right: 2px solid #fff;
+    border-left: 2px solid #fff;
     background: #000;
     cursor: pointer;
     padding: 10px 12px;
@@ -174,7 +174,7 @@
     overflow: hidden;
   }
 
-  .btn:last-child { border-right: none; }
+  .btn:first-child { border-left: none; }
   .btn:active     { background: #181818; }
 
   .btn svg {
@@ -205,11 +205,22 @@
                                     width: var(--btn-bar-height); height: auto; }
   body.landscape #btn-bar        { height: 100%; flex-direction: column;
                                     border-top: none; border-left: 2px solid #fff; }
-  body.landscape .btn            { border-right: none; border-bottom: 2px solid #fff;
+  body.landscape .btn            { border-left: none; border-top: 2px solid #fff;
                                     flex-direction: column; gap: 4px; padding: 8px 4px; }
-  body.landscape .btn:last-child { border-bottom: none; }
+  body.landscape .btn:first-child { border-top: none; }
   body.landscape .btn svg        { width: 28px; height: 28px; }
-  body.landscape .btn-label      { font-size: 11px; text-align: center; }
+  body.landscape .btn-label      {
+    font-size: 11px;
+    text-align: center;
+
+    /* offscreen */
+    position: absolute;
+    left: -9999px;
+    top: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
 
   /* Logo → bottom-left, zoom pill → top-left in landscape */
   body.landscape .heading    { top: auto; bottom: 0.7rem; }

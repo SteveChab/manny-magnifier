@@ -50,21 +50,29 @@ The paid iOS and Android apps include two additional controls not available in t
 The git repository root is the web app itself, with the native project nested inside it.
 
 ```
-mmagnifier/                           # Git root — served via GitHub Pages
-├── index.html                        # Entire app: camera, filters, controls
-├── mmagnifier-logo.svg               # App icon / favicon
+mmagnifier/                           # Git root — deployed to mmagnifier.com
+├── index.html                        # Marketing landing page
+├── privacy.html                      # Privacy policy (https://mmagnifier.com/privacy)
+├── mmagnifier-logo.svg               # Wordmark SVG (used by landing page)
+├── css/
+│   └── styles.css                    # Shared styles: landing page + privacy page
+├── js/
+│   └── main.js                       # Landing page JS (phone parallax)
+├── app/
+│   ├── index.html                    # Web app: camera, filters, controls
+│   └── mmagnifier-logo.svg           # Copy — keeps app/ self-contained
 ├── README.md                         # This file
 ├── .github/
 │   └── workflows/static.yml          # GitHub Pages deployment (excludes native/)
 └── native/                           # Paid native app — Capacitor wrapper
-    ├── package.json                  # npm run sync — copies web files + cap sync
+    ├── package.json                  # npm run sync — copies app/ files + cap sync
     ├── capacitor.config.json         # webDir: "www"
     ├── www/                          # Auto-generated staging dir (gitignored)
     ├── ios/                          # Xcode project (git-tracked)
     └── android/                      # Android Studio project (git-tracked)
 ```
 
-The web and native apps share a single `index.html`. Native-only features (torch, freeze) are gated behind `Capacitor.isNativePlatform()` and invisible in the browser. `native/` is excluded from the GitHub Pages deployment via rsync in the workflow.
+The landing page lives at the root; the web app is served from `/app/`. The native app syncs from `app/index.html` into `native/www/`. Native-only features (torch, freeze) are gated behind `Capacitor.isNativePlatform()` and invisible in the browser. `native/` is excluded from the GitHub Pages deployment via rsync in the workflow.
 
 ### Zoom Pipeline
 
@@ -116,18 +124,18 @@ Open on a mobile browser and allow camera access.
 ### Native app (requires Xcode + Android Studio)
 ```bash
 cd native
-npm run sync          # copy latest web files into www/, then cap sync
+npm run sync          # copies app/index.html + app/mmagnifier-logo.svg into www/, then cap sync
 npx cap open ios      # open in Xcode
 npx cap open android  # open in Android Studio
 ```
 
-After editing `index.html`, run `npm run sync` from `native/` to push changes into both native projects.
+After editing `app/index.html`, run `npm run sync` from `native/` to push changes into both native projects.
 
 ## Deployment
 
 ### Web Version — free, always will be
 
-The repository root is the web app. Push to `main` and GitHub Actions deploys automatically. Can also be self-hosted on any static host (Netlify, Vercel, Cloudflare Pages, etc.).
+Live at **[mmagnifier.com/app](https://mmagnifier.com/app)**. Push to `main` and GitHub Actions deploys automatically via the custom domain (`CNAME: mmagnifier.com`). Can also be self-hosted on any static host (Netlify, Vercel, Cloudflare Pages, etc.).
 
 ### Native Apps — paid
 
@@ -191,4 +199,4 @@ The web version is free to use. The native apps are paid.
 
 ## Contact
 
-For questions, feature requests, or collaboration: [Contact info TBD]
+For questions, feature requests, or collaboration: [contact@mmagnifier.com](mailto:contact@mmagnifier.com)
