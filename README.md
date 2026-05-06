@@ -13,7 +13,7 @@ The app works in both directions. Point it at something nearby to magnify it; po
 
 ### Core Features
 
-- **Live camera magnification** — 1× to 6× zoom (11 steps), using the camera's native zoom where available for maximum sharpness
+- **Live camera magnification** — up to 6× zoom (11 steps) on any device; extends to the camera's native optical max (e.g. 10×) on hardware that exposes zoom via WebRTC. Zoom levels are built dynamically at startup based on what the device reports.
 - **5 color modes** optimized for different vision needs:
   - Color (unfiltered camera)
   - Yellow/Black

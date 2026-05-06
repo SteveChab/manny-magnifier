@@ -320,7 +320,6 @@
     { cont: 1.0 }, { cont: 2.0 }, { cont: 3.0 }, { cont: 4.0 },
   ];
 
-  const DEFAULT_LEVELS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6];
   const STORAGE_KEY = 'mmagnifier';
 
   const video       = document.getElementById('camera');
@@ -352,7 +351,7 @@
     }, 300);
   }
 
-  let zoomLevels = DEFAULT_LEVELS.slice();
+  let zoomLevels = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6]; // rebuilt from camera caps on start
   let maxZoom = 6;
   let zoomMode = null;   // null until camera starts, then 'canvas'
   let track = null;
@@ -401,17 +400,22 @@
       // the canvas crops any remaining factor. This gives the full stream-resolution
       // zoom range regardless of the native cap, with better quality at low zoom levels.
       zoomMode = 'canvas';
-      const vw = Math.max(viewfinder.clientWidth,  1);
-      const vh = Math.max(viewfinder.clientHeight, 1);
-      const resBound = Math.min(streamW / vw, streamH / vh);
-      maxZoom = Math.max(1, Math.min(6, resBound));
+      // Use native zoom cap if the device reports one; otherwise fall back to 6×.
+      // Canvas cropping handles anything above the native cap.
+      maxZoom = (zoomCaps && typeof zoomCaps.max === 'number' && zoomCaps.max > 1)
+        ? zoomCaps.max
+        : 6;
       if (!cameraStarted) startCanvasLoop();
       cameraStarted = true;
 
-      zoomLevels = DEFAULT_LEVELS.filter(v => v <= maxZoom + 0.001);
-      if (zoomLevels.length === 0 || zoomLevels[zoomLevels.length - 1] < maxZoom - 0.05) {
+      // 0.5× steps from 1–6, then 1× steps from 7 to maxZoom.
+      zoomLevels = [];
+      for (let z = 1; z <= Math.min(6, maxZoom) + 0.001; z += 0.5)
+        zoomLevels.push(Math.round(z * 10) / 10);
+      for (let z = 7; z <= maxZoom + 0.001; z += 1)
+        zoomLevels.push(Math.round(z * 10) / 10);
+      if (zoomLevels[zoomLevels.length - 1] < maxZoom - 0.05)
         zoomLevels.push(Math.round(maxZoom * 10) / 10);
-      }
 
       state.zoom = clamp(state.zoom, 1, maxZoom);
       render();
