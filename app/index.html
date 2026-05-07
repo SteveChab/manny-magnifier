@@ -225,6 +225,27 @@
   /* Logo → bottom-left, zoom pill → top-left in landscape */
   body.landscape .heading    { top: auto; bottom: 0.7rem; }
   body.landscape #zoom-pill  { right: auto; left: 0.75rem; }
+
+  /* ── OCR overlay ── */
+  #ocr-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 3;
+  }
+  #ocr-overlay.active { pointer-events: auto; }
+
+  .ocr-block {
+    position: absolute;
+    border: 2px solid #000;
+    outline: 2px solid #ff0;
+    background: rgba(255, 255, 0, 0.12);
+    box-sizing: border-box;
+    cursor: pointer;
+    border-radius: 3px;
+    padding: .35em;
+  }
+  .ocr-block:active { background: rgba(255, 255, 0, 0.35); }
 </style>
 </head>
 <body>
@@ -251,6 +272,7 @@
   <video id="camera" autoplay playsinline muted></video>
   <canvas id="camera-canvas"></canvas>
   <div id="tint-overlay"></div>
+  <div id="ocr-overlay"></div>
   <div id="no-camera" onclick="requestCamera()" role="button" tabindex="0">Tap to Allow Camera</div>
 </div>
 
@@ -285,20 +307,32 @@
     <!-- Light (flashlight) — native only, hidden in browser -->
     <button class="btn" id="torch-btn" onclick="toggleTorch()" aria-label="Toggle light" style="display:none">
       <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M9 3 L15 3 L17 7 L17 9 L7 9 L7 7 Z"/>
-        <rect x="7" y="9" width="10" height="12" rx="0.5"/>
-        <line x1="12" y1="13" x2="12" y2="16"/>
+        <circle cx="12" cy="9" r="5.5"/>
+        <line x1="9.5" y1="16.5" x2="14.5" y2="16.5"/>
+        <line x1="10.5" y1="19"  x2="13.5" y2="19"/>
       </svg>
       <span class="btn-label" id="torch-label">Light</span>
     </button>
 
+    <!-- Read / OCR — native only, hidden in browser -->
+    <button class="btn" id="read-btn" onclick="runOCR()" aria-label="Scan frame and read text aloud" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="4" y1="6"  x2="20" y2="6"/>
+        <line x1="4" y1="10" x2="16" y2="10"/>
+        <line x1="4" y1="14" x2="20" y2="14"/>
+        <line x1="4" y1="18" x2="14" y2="18"/>
+      </svg>
+      <span class="btn-label" id="read-label">Read</span>
+    </button>
+
     <!-- Freeze frame — native only, hidden in browser -->
-    <button class="btn" id="freeze-btn" onclick="freezeFrame()" aria-label="Freeze frame" style="display:none">
+    <button class="btn" id="freeze-btn" onclick="freezeFrame()" aria-label="Pause live feed for visual inspection" style="display:none">
       <svg id="freeze-icon" viewBox="0 0 24 24" fill="#fff" stroke="#fff" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="6"  y="4" width="4" height="16" rx="0.5"/>
         <rect x="14" y="4" width="4" height="16" rx="0.5"/>
       </svg>
-      <span class="btn-label" id="freeze-label">Freeze</span>
+      <span class="btn-label" id="freeze-label">Pause</span>
     </button>
 
   </div>
@@ -309,11 +343,11 @@
   'use strict';
 
   const MODES = [
-    { name: 'Color',        naturalColor: true, tint: '#ffffff', iconFill: '#00ffff', iconStroke: '#00ffff' },
-    { name: 'Yellow/Black', invert: true,  tint: '#ffff00', iconFill: '#ffff00', iconStroke: '#ffff00' },
-    { name: 'Black/Yellow', invert: false, tint: '#ffff00', iconFill: '#000000', iconStroke: '#ffff00' },
-    { name: 'White/Black',  invert: true,  tint: '#ffffff', iconFill: '#ffffff', iconStroke: '#ffffff' },
-    { name: 'Black/White',  invert: false, tint: '#ffffff', iconFill: '#000000', iconStroke: '#ffffff' },
+    { name: 'Color',        short: 'Color',   naturalColor: true, tint: '#ffffff', iconFill: '#00ffff', iconStroke: '#00ffff' },
+    { name: 'Yellow/Black', short: 'Y / Blk', invert: true,  tint: '#ffff00', iconFill: '#ffff00', iconStroke: '#ffff00' },
+    { name: 'Black/Yellow', short: 'Blk / Y', invert: false, tint: '#ffff00', iconFill: '#000000', iconStroke: '#ffff00' },
+    { name: 'White/Black',  short: 'W / Blk', invert: true,  tint: '#ffffff', iconFill: '#ffffff', iconStroke: '#ffffff' },
+    { name: 'Black/White',  short: 'Blk / W', invert: false, tint: '#ffffff', iconFill: '#000000', iconStroke: '#ffffff' },
   ];
 
   const BRIGHT = [
@@ -436,6 +470,7 @@
       const h = viewfinder.clientHeight || (window.innerHeight - 72);
       canvas.width  = w * dpr;
       canvas.height = h * dpr;
+      if (ocrActive) clearOCR();  // overlay coords stale after rotation
     }
     resize();
     // ResizeObserver fires reliably on viewport rotation in Capacitor WebViews;
@@ -500,7 +535,7 @@
 
     tintOverlay.style.background = m.tint;
 
-    modeLabel.textContent   = m.name;
+    modeLabel.textContent   = m.short;
     zoomLabel.textContent   = fmtZoom(state.zoom);
     brightLabel.textContent = b.cont + '×';
 
@@ -585,6 +620,7 @@
 
   if (isNative) {
     document.getElementById('torch-btn').style.display  = 'flex';
+    document.getElementById('read-btn').style.display   = 'flex';
     document.getElementById('freeze-btn').style.display = 'flex';
     document.getElementById('btn-bar').classList.add('compact');
   }
@@ -649,9 +685,111 @@
   window.addEventListener('resize', updateOrientation);
   updateOrientation();
 
+  // ── OCR + Text-to-Speech ─────────────────────────────────────
+  let ocrActive    = false;
+  let ocrPreFrozen = false;  // was frame already frozen by the user before OCR started?
+
+  window.runOCR = async () => {
+    if (!isNative) return;
+    if (ocrActive) { clearOCR(); return; }
+
+    ocrPreFrozen = frozen;
+    if (!frozen) freezeFrame();
+
+    ocrActive = true;
+    const readLabel = document.getElementById('read-label');
+    const readBtn   = document.getElementById('read-btn');
+    readLabel.textContent    = 'Stop';
+    readBtn.style.background = '#222';
+
+    const base64 = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
+
+    try {
+      const Plugin = window.Capacitor?.Plugins?.CapacitorPluginMlKitTextRecognition;
+      const result = await Plugin.detectText({ base64Image: base64 });
+      const blocks = result.blocks || [];
+
+      if (blocks.length === 0) {
+        readLabel.textContent = 'No text';
+        setTimeout(() => { if (ocrActive) clearOCR(); }, 2000);
+        return;
+      }
+
+      // Sort top-to-bottom, then left-to-right
+      blocks.sort((a, b) =>
+        a.boundingBox.top !== b.boundingBox.top
+          ? a.boundingBox.top - b.boundingBox.top
+          : a.boundingBox.left - b.boundingBox.left
+      );
+
+      renderOCRBlocks(blocks);
+      speakText(blocks.map(b => b.text).join('. '));
+
+    } catch (_) {
+      readLabel.textContent = 'Error';
+      setTimeout(() => { if (ocrActive) clearOCR(); }, 2000);
+    }
+  };
+
+  function renderOCRBlocks(blocks) {
+    const overlay = document.getElementById('ocr-overlay');
+    overlay.innerHTML = '';
+    overlay.classList.add('active');
+
+    // boundingBox is in image pixels (canvas.width × canvas.height).
+    // Scale to CSS display pixels (canvas.clientWidth × canvas.clientHeight).
+    const sx = canvas.clientWidth  / canvas.width;
+    const sy = canvas.clientHeight / canvas.height;
+
+    blocks.forEach(block => {
+      const el = document.createElement('div');
+      el.className    = 'ocr-block';
+      el.style.left   = (block.boundingBox.left                              * sx) + 'px';
+      el.style.top    = (block.boundingBox.top                               * sy) + 'px';
+      el.style.width  = ((block.boundingBox.right  - block.boundingBox.left) * sx) + 'px';
+      el.style.height = ((block.boundingBox.bottom - block.boundingBox.top)  * sy) + 'px';
+      el.addEventListener('click', () => speakText(block.text));
+      overlay.appendChild(el);
+    });
+  }
+
+  function speakText(text) {
+    // Prefer Capacitor native TTS (reliable on Android + iOS).
+    // window.speechSynthesis is undefined in Capacitor's Android WebView.
+    const TTS = window.Capacitor?.Plugins?.TextToSpeech;
+    if (TTS) {
+      TTS.speak({ text, locale: 'en-US' }).catch(() => {});
+      return;
+    }
+    // Web fallback (browser / future environments)
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+  }
+
+  function clearOCR() {
+    // Stop any active speech — guard against undefined in either path
+    const TTS = window.Capacitor?.Plugins?.TextToSpeech;
+    if (TTS) { TTS.stop().catch(() => {}); }
+    else { try { window.speechSynthesis?.cancel(); } catch (_) {} }
+    ocrActive = false;
+    const overlay = document.getElementById('ocr-overlay');
+    overlay.innerHTML = '';
+    overlay.classList.remove('active');
+    document.getElementById('read-label').textContent    = 'Read';
+    document.getElementById('read-btn').style.background = '';
+    // Restore pre-OCR frozen state — don't unfreeze a frame the user chose to hold
+    if (!ocrPreFrozen && frozen) freezeFrame();
+  }
+
+  // ── Freeze frame ─────────────────────────────────────────────
   // Freeze frame: stop the canvas draw loop so users can read steady text.
   // The video stream keeps running; `frozen` simply stops drawImage() each frame.
   window.freezeFrame = () => {
+    // If Read mode is active, tapping Pause/Resume exits it —
+    // clearOCR() restores the pre-OCR freeze state automatically
+    if (ocrActive) { clearOCR(); return; }
+
     frozen = !frozen;
     if (frozen) {
       document.getElementById('freeze-label').textContent = 'Resume';
@@ -659,7 +797,7 @@
         '<polygon points="6,4 6,20 20,12" />';
       document.getElementById('freeze-btn').style.background = '#222';
     } else {
-      document.getElementById('freeze-label').textContent = 'Freeze';
+      document.getElementById('freeze-label').textContent = 'Pause';
       document.getElementById('freeze-icon').innerHTML =
         '<rect x="6" y="4" width="4" height="16" rx="0.5"/><rect x="14" y="4" width="4" height="16" rx="0.5"/>';
       document.getElementById('freeze-btn').style.background = '';

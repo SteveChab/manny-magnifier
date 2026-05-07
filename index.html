@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="mmagnifier turns your phone into a powerful handheld magnifier for people with low vision. Five color modes, 6× zoom, torch, freeze frame.">
+  <meta name="description" content="mmagnifier turns your phone into a powerful handheld magnifier for people with low vision. Five color modes, up to device-max zoom, torch, pause frame, read text aloud.">
   <title>mmagnifier \\ Precision magnifier for low vision</title>
   <link rel="icon" href="mmagnifier-logo.svg">
   <link rel="stylesheet" href="css/styles.css">
@@ -72,33 +72,96 @@
   <!-- FEATURES -->
   <section class="features">
     <div class="inner">
-      <div class="features-grid">
-        <div class="feature-col">
-          <h2>Web <span class="label">free</span></h2>
-          <ul>
-            <li>5 color modes</li>
-            <li>4 contrast levels</li>
-            <li>Pinch to zoom</li>
-            <li>Tap to focus</li>
-            <li>Landscape auto-rotate</li>
-            <li>Settings saved</li>
-            <li>No account needed</li>
-          </ul>
-          <a href="./app/" class="web-link">Try free on the web →</a>
-        </div>
-        <div class="feature-col">
-          <h2>App <span class="label">$2.99</span></h2>
-          <ul>
-            <li class="plus">The free stuff, plus:</li>
-            <li>Torch / flashlight</li>
-            <li>Freeze frame</li>
-          </ul>
-          <!-- Update href once the Play Store listing is live -->
-          <a href="https://play.google.com/store/apps/details?id=com.mmagnifier.app" class="play-btn">
-            <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png"
-                 alt="Get it on Google Play" width="180" height="69">
-          </a>
-        </div>
+      <div class="compare-wrap">
+        <table class="compare">
+          <caption class="sr-only">mmagnifier feature comparison: Web vs App</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="cmp-feat">
+                <span class="cmp-tier sr-only">Feature</span>
+              </th>
+              <th scope="col" class="cmp-web">
+                <span class="cmp-tier">Web</span>
+                <span class="cmp-price">free</span>
+              </th>
+              <th scope="col" class="cmp-app">
+                <span class="cmp-tier">App</span>
+                <span class="cmp-price">$2.99</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="cmp-feat">5 color modes</td>
+              <td class="cmp-web"><span class="cmp-yes">✓</span></td>
+              <td class="cmp-app"><span class="cmp-yes">✓</span></td>
+            </tr>
+            <tr>
+              <td class="cmp-feat">4 contrast levels</td>
+              <td class="cmp-web"><span class="cmp-yes">✓</span></td>
+              <td class="cmp-app"><span class="cmp-yes">✓</span></td>
+            </tr>
+            <tr>
+              <td class="cmp-feat">Tap to cycle zoom levels</td>
+              <td class="cmp-web"><span class="cmp-yes">✓</span></td>
+              <td class="cmp-app"><span class="cmp-yes">✓</span></td>
+            </tr>
+            <tr>
+              <td class="cmp-feat">Pinch to zoom</td>
+              <td class="cmp-web"><span class="cmp-yes">✓</span></td>
+              <td class="cmp-app"><span class="cmp-yes">✓</span></td>
+            </tr>
+            <tr>
+              <td class="cmp-feat">Tap to focus</td>
+              <td class="cmp-web"><span class="cmp-yes">✓</span></td>
+              <td class="cmp-app"><span class="cmp-yes">✓</span></td>
+            </tr>
+            <tr>
+              <td class="cmp-feat">Landscape auto-rotate</td>
+              <td class="cmp-web"><span class="cmp-yes">✓</span></td>
+              <td class="cmp-app"><span class="cmp-yes">✓</span></td>
+            </tr>
+            <tr>
+              <td class="cmp-feat">Settings remembered</td>
+              <td class="cmp-web"><span class="cmp-yes">✓</span></td>
+              <td class="cmp-app"><span class="cmp-yes">✓</span></td>
+            </tr>
+            <tr>
+              <td class="cmp-feat">No account · no ads</td>
+              <td class="cmp-web"><span class="cmp-yes">✓</span></td>
+              <td class="cmp-app"><span class="cmp-yes">✓</span></td>
+            </tr>
+            <tr class="app-only-first">
+              <td class="cmp-feat">Torch / flashlight</td>
+              <td class="cmp-web"><span class="cmp-no">—</span></td>
+              <td class="cmp-app"><span class="cmp-yes">✓</span></td>
+            </tr>
+            <tr>
+              <td class="cmp-feat">Pause frame</td>
+              <td class="cmp-web"><span class="cmp-no">—</span></td>
+              <td class="cmp-app"><span class="cmp-yes">✓</span></td>
+            </tr>
+            <tr>
+              <td class="cmp-feat">Read text aloud</td>
+              <td class="cmp-web"><span class="cmp-no">—</span></td>
+              <td class="cmp-app"><span class="cmp-yes">✓</span></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td></td>
+              <td class="cmp-web">
+                <a href="./app/" class="web-link">Try free →</a>
+              </td>
+              <td class="cmp-app">
+                <a href="https://play.google.com/store/apps/details?id=com.mmagnifier.app" class="play-btn">
+                  <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png"
+                       alt="Get it on Google Play" width="180" height="69">
+                </a>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
     </div>
   </section>

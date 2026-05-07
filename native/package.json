@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "sync": "mkdir -p www && cp ../app/index.html ../app/mmagnifier-logo.svg www/ && LANG=en_US.UTF-8 PATH=\"/opt/homebrew/lib/ruby/gems/4.0.0/bin:$PATH\" npx cap sync",
+    "postinstall": "patch-package",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -11,10 +12,13 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@capacitor-community/text-to-speech": "^6.0.0",
     "@capacitor/android": "^8.3.1",
     "@capacitor/cli": "^7.6.2",
     "@capacitor/core": "^8.3.1",
     "@capacitor/ios": "^8.3.1",
-    "@capawesome/capacitor-torch": "^8.0.1"
+    "@capawesome/capacitor-torch": "^8.0.1",
+    "@pantrist/capacitor-plugin-ml-kit-text-recognition": "^8.0.0",
+    "patch-package": "^8.0.1"
   }
 }

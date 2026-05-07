@@ -1,0 +1,22 @@
+diff --git a/node_modules/@pantrist/capacitor-plugin-ml-kit-text-recognition/android/build.gradle b/node_modules/@pantrist/capacitor-plugin-ml-kit-text-recognition/android/build.gradle
+index 3924fc2..4928d68 100644
+--- a/node_modules/@pantrist/capacitor-plugin-ml-kit-text-recognition/android/build.gradle
++++ b/node_modules/@pantrist/capacitor-plugin-ml-kit-text-recognition/android/build.gradle
+@@ -13,7 +13,7 @@ buildscript {
+ 
+     repositories {
+         google()
+-        jcenter()
++        mavenCentral()
+     }
+     dependencies {
+         classpath 'com.android.tools.build:gradle:8.13.0'
+@@ -37,7 +37,7 @@ android {
+     buildTypes {
+         release {
+             minifyEnabled false
+-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
++            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+         }
+     }
+     lintOptions {

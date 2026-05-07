@@ -13,7 +13,7 @@ The app works in both directions. Point it at something nearby to magnify it; po
 
 ### Core Features
 
-- **Live camera magnification** — up to 6× zoom (11 steps) on any device; extends to the camera's native optical max (e.g. 10×) on hardware that exposes zoom via WebRTC. Zoom levels are built dynamically at startup based on what the device reports.
+- **Live camera magnification** — zoom levels built dynamically from hardware capabilities; 0.5× steps from 1–6×, then 1× steps to the camera's native optical max (e.g. 10×) on devices that expose zoom via WebRTC.
 - **5 color modes** optimized for different vision needs:
   - Color (unfiltered camera)
   - Yellow/Black
@@ -28,12 +28,13 @@ The app works in both directions. Point it at something nearby to magnify it; po
 - **Large, simple controls** — buttons with icon + label, designed for easy use with reduced visual acuity
 - **Settings persistence** — last-used color mode, brightness, and zoom level are remembered across sessions
 
-### Native App Features (v1.0)
+### Native App Features (v1.1)
 
-The paid iOS and Android apps include two additional controls not available in the browser:
+The paid Android app includes additional controls not available in the browser:
 
 - **Torch** — toggle the flashlight for illuminating close-up subjects
-- **Freeze** — pause the live camera feed; tap again to resume
+- **Pause** — pause the live camera feed; tap Resume to continue
+- **Read** — freezes the frame, scans all text on-device (ML Kit OCR), and reads it aloud (TTS); tap any yellow-outlined block to re-read that section; tap Stop or Pause to exit
 
 ## Technical Architecture
 
@@ -152,7 +153,8 @@ iOS and Android apps are built with Ionic Capacitor. The native projects live in
 
 ### Native app only
 - **Torch button** — Toggle flashlight on/off
-- **Freeze button** — Pause/resume the live camera feed
+- **Pause button** — Pause/resume the live camera feed
+- **Read button** — Scan the frozen frame with on-device OCR and read detected text aloud; tap any highlighted block to replay that section; tap Stop or Pause to exit
 
 All buttons show their current state in the label beside the icon.
 
@@ -184,9 +186,6 @@ This code is source-available for review but not open source. You may view it, b
 The web version is free to use. The native apps are paid.
 
 ## Roadmap
-
-### Native app v1.1
-- OCR → Text-to-Speech (read printed text aloud)
 
 ### Native app v1.2
 - Macro lens access (iPhone 13 Pro+ / recent Android flagships)
