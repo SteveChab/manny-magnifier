@@ -1,25 +1,17 @@
 # macOS
 .DS_Store
 
-# iOS — signing credentials (never commit these)
+# Claude Code
+CLAUDE.md
+
+# Signing credentials (never commit these)
 native/*.p12
 native/*.mobileprovision
-# iOS — generated/installed artifacts
-native/ios/App/Pods/
-native/ios/App/App/public/
-
-# Android — signing credentials (never commit these)
 native/*.jks
 native/*.keystore
-# Android — generated/installed artifacts
-native/android/.gradle/
-native/android/app/build/
-native/android/local.properties
-# Android Studio IDE files (local-only, no value in public repo)
-# Use glob (not trailing /) so the negation below can re-include the nested .gitignore
-native/android/.idea/*
-# Keep the nested .gitignore so workspace.xml (device serial) stays excluded
-!native/android/.idea/.gitignore
+
+# Android Studio local IDE state (not needed in source control)
+native/android/.idea/
 
 # Node
 native/node_modules/

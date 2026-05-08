@@ -1,7 +1,7 @@
 /* ── Phone parallax ── */
 (function () {
-  const phone   = document.querySelector('.phone')
-    isMobile = window.innerWidth < 500;
+  const phone    = document.querySelector('.phone');
+  const isMobile = window.innerWidth < 500;
   if (!phone || isMobile) return;
 
   function scrollPhone() {

@@ -263,7 +263,7 @@
         <polygon points="53.02 83.66 49.32 87.02 57.03 95.49 72.56 95.53 72.57 90.53 59.25 90.49 53.02 83.66"/>
       </svg>
     </h1>
-    <button id="zoom-pill" onclick="cycleZoom()" aria-label="Change zoom level">
+    <button type="button" id="zoom-pill" onclick="cycleZoom()" aria-label="Change zoom level">
       <span id="zoom-label">1×</span>
     </button>
 
@@ -273,7 +273,7 @@
   <canvas id="camera-canvas"></canvas>
   <div id="tint-overlay"></div>
   <div id="ocr-overlay"></div>
-  <div id="no-camera" onclick="requestCamera()" role="button" tabindex="0">Tap to Allow Camera</div>
+  <button id="no-camera" onclick="requestCamera()">Tap to Allow Camera</button>
 </div>
 
 <!-- Controls: 3 buttons with labels underneath -->
@@ -281,7 +281,7 @@
   <div id="btn-bar" role="toolbar" aria-label="Magnifier controls">
 
     <!-- Color mode cycle -->
-    <button class="btn" onclick="nextMode()" aria-label="Change color mode">
+    <button type="button" class="btn" onclick="nextMode()" aria-label="Change color mode">
       <svg id="mode-icon" viewBox="0 0 24 24" aria-hidden="true">
         <circle id="mode-circle" cx="12" cy="12" r="8.5" stroke-width="2.2"/>
       </svg>
@@ -289,7 +289,7 @@
     </button>
 
     <!-- Brightness cycle -->
-    <button class="btn" onclick="nextBright()" aria-label="Change brightness">
+    <button type="button" class="btn" onclick="nextBright()" aria-label="Change brightness">
       <svg id="bright-svg" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
         <circle id="bright-circle" cx="12" cy="12" r="4" fill="none"/>
         <line x1="12"   y1="2"    x2="12"   y2="4.5"/>
@@ -305,7 +305,7 @@
     </button>
 
     <!-- Light (flashlight) — native only, hidden in browser -->
-    <button class="btn" id="torch-btn" onclick="toggleTorch()" aria-label="Toggle light" style="display:none">
+    <button type="button" class="btn" id="torch-btn" onclick="toggleTorch()" aria-label="Toggle light" style="display:none">
       <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="12" cy="9" r="5.5"/>
         <line x1="9.5" y1="16.5" x2="14.5" y2="16.5"/>
@@ -315,7 +315,7 @@
     </button>
 
     <!-- Read / OCR — native only, hidden in browser -->
-    <button class="btn" id="read-btn" onclick="runOCR()" aria-label="Scan frame and read text aloud" style="display:none">
+    <button type="button" class="btn" id="read-btn" onclick="runOCR()" aria-label="Scan frame and read text aloud" style="display:none">
       <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <line x1="4" y1="6"  x2="20" y2="6"/>
@@ -327,7 +327,7 @@
     </button>
 
     <!-- Freeze frame — native only, hidden in browser -->
-    <button class="btn" id="freeze-btn" onclick="freezeFrame()" aria-label="Pause live feed for visual inspection" style="display:none">
+    <button type="button" class="btn" id="freeze-btn" onclick="freezeFrame()" aria-label="Pause live feed for visual inspection" style="display:none">
       <svg id="freeze-icon" viewBox="0 0 24 24" fill="#fff" stroke="#fff" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="6"  y="4" width="4" height="16" rx="0.5"/>
         <rect x="14" y="4" width="4" height="16" rx="0.5"/>
@@ -579,7 +579,8 @@
   viewfinder.addEventListener('touchmove', (e) => {
     if (pinching && e.touches.length === 2) {
       const d = dist(e.touches[0], e.touches[1]);
-      const ratio = d / (pinchStartDist || d);
+      if (!pinchStartDist) return;  // guard: avoid NaN if fingers started at same pixel
+      const ratio = d / pinchStartDist;
       state.zoom = clamp(pinchStartZoom * ratio, 1, maxZoom);
       render();
       e.preventDefault();
@@ -592,7 +593,7 @@
       tapStart = null;
       return;
     }
-    if (e.touches.length === 0 && tapStart && supportsPOI && track) {
+    if (e.touches.length === 0 && tapStart && supportsPOI && track && !frozen) {
       const t = e.changedTouches[0];
       const dt = Date.now() - tapStart.time;
       const dx = Math.abs(t.clientX - tapStart.x);
@@ -686,8 +687,9 @@
   updateOrientation();
 
   // ── OCR + Text-to-Speech ─────────────────────────────────────
-  let ocrActive    = false;
-  let ocrPreFrozen = false;  // was frame already frozen by the user before OCR started?
+  let ocrActive     = false;
+  let ocrPreFrozen  = false;  // was frame already frozen by the user before OCR started?
+  let ocrGeneration = 0;      // incremented on each runOCR call; guards stale async callbacks
 
   window.runOCR = async () => {
     if (!isNative) return;
@@ -697,6 +699,8 @@
     if (!frozen) freezeFrame();
 
     ocrActive = true;
+    const gen = ++ocrGeneration;  // capture this call's generation ID
+
     const readLabel = document.getElementById('read-label');
     const readBtn   = document.getElementById('read-btn');
     readLabel.textContent    = 'Stop';
@@ -707,11 +711,15 @@
     try {
       const Plugin = window.Capacitor?.Plugins?.CapacitorPluginMlKitTextRecognition;
       const result = await Plugin.detectText({ base64Image: base64 });
+
+      // If OCR was cancelled while we were awaiting, discard this result silently
+      if (!ocrActive || gen !== ocrGeneration) return;
+
       const blocks = result.blocks || [];
 
       if (blocks.length === 0) {
         readLabel.textContent = 'No text';
-        setTimeout(() => { if (ocrActive) clearOCR(); }, 2000);
+        setTimeout(() => { if (ocrActive && gen === ocrGeneration) clearOCR(); }, 2000);
         return;
       }
 
@@ -726,8 +734,9 @@
       speakText(blocks.map(b => b.text).join('. '));
 
     } catch (_) {
+      if (!ocrActive || gen !== ocrGeneration) return;
       readLabel.textContent = 'Error';
-      setTimeout(() => { if (ocrActive) clearOCR(); }, 2000);
+      setTimeout(() => { if (ocrActive && gen === ocrGeneration) clearOCR(); }, 2000);
     }
   };
 
@@ -742,13 +751,16 @@
     const sy = canvas.clientHeight / canvas.height;
 
     blocks.forEach(block => {
-      const el = document.createElement('div');
+      const el = document.createElement('button');
       el.className    = 'ocr-block';
       el.style.left   = (block.boundingBox.left                              * sx) + 'px';
       el.style.top    = (block.boundingBox.top                               * sy) + 'px';
       el.style.width  = ((block.boundingBox.right  - block.boundingBox.left) * sx) + 'px';
       el.style.height = ((block.boundingBox.bottom - block.boundingBox.top)  * sy) + 'px';
       el.addEventListener('click', () => speakText(block.text));
+      el.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); speakText(block.text); }
+      });
       overlay.appendChild(el);
     });
   }
