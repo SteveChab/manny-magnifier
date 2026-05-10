@@ -53,7 +53,8 @@ The git repository root is the web app itself, with the native project nested in
 ```
 mmagnifier/                           # Git root — deployed to mmagnifier.com
 ├── index.html                        # Marketing landing page
-├── privacy.html                      # Privacy policy (https://mmagnifier.com/privacy)
+├── privacy/
+│   └── index.html                    # Privacy policy (https://mmagnifier.com/privacy)
 ├── mmagnifier-logo.svg               # Wordmark SVG (used by landing page)
 ├── css/
 │   └── styles.css                    # Shared styles: landing page + privacy page
@@ -79,9 +80,13 @@ The landing page lives at the root; the web app is served from `/app/`. The nati
 
 The app uses a two-tier zoom strategy, auto-detected at startup:
 
-1. **Tier A — Native track zoom** (preferred): `track.applyConstraints({ advanced: [{ zoom }] })` drives the camera's actual sensor/lens zoom for maximum sharpness. Available on iOS Safari 17.4+ and modern Android Chrome.
+1. **Tier A — Native track zoom** (preferred): `track.applyConstraints({ advanced: [{ zoom, videoStabilization: false, sharpness: 8 }] })` drives the camera's actual sensor/lens zoom for maximum sharpness. `videoStabilization: false` requests raw optical output (bypasses EIS blurring); `sharpness: 8` requests in-sensor sharpening. Both are silently ignored on devices that don't expose these constraints. Available on iOS Safari 17.4+ and modern Android Chrome.
 
-2. **Tier B — Canvas crop from high-res stream** (fallback): Captures a 4K stream and crops it in a `<canvas>` using `requestVideoFrameCallback`. Because the source is already high-resolution, this stays sharp well past what CSS upscaling can achieve.
+2. **Tier B — Canvas crop from high-res stream** (always active): The `<video>` element is a hidden data source; the `<canvas>` is the visible display layer. `drawCurrentFrame()` crops a sub-region of the video frame to apply any zoom beyond the native hardware cap. Because the source is 4K, this stays sharp well past what CSS upscaling can achieve.
+
+`drawCurrentFrame()` lives at the outer IIFE scope so it can be called from four sites: the live draw loop, `render()` (zoom-while-frozen), `resize()` (rotate-while-frozen), and the initial camera start. Canvas `imageSmoothingQuality` is set dynamically per draw: `'high'` (Lanczos) when frozen for maximum detail, `'low'` (bilinear) during the live 30 fps feed for performance — a canvas resize resets this to the default so it must be re-applied on every draw call.
+
+`lastAppliedZoom` guards `applyNativeZoom()` — it returns immediately when zoom hasn't changed, preventing a hardware `applyConstraints` call (which can stall the Android camera pipeline for ~1 s) on every color-mode or brightness button press.
 
 The zoom level array is built dynamically from device capabilities so the app never promises a level it can't deliver crisply.
 
