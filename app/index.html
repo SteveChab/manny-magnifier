@@ -346,8 +346,10 @@
     { name: 'Color',        short: 'Color',   naturalColor: true, tint: '#ffffff', iconFill: '#00ffff', iconStroke: '#00ffff' },
     { name: 'Yellow/Black', short: 'Y / Blk', invert: true,  tint: '#ffff00', iconFill: '#ffff00', iconStroke: '#ffff00' },
     { name: 'Black/Yellow', short: 'Blk / Y', invert: false, tint: '#ffff00', iconFill: '#000000', iconStroke: '#ffff00' },
-    { name: 'White/Black',  short: 'W / Blk', invert: true,  tint: '#ffffff', iconFill: '#ffffff', iconStroke: '#ffffff' },
-    { name: 'Black/White',  short: 'Blk / W', invert: false, tint: '#ffffff', iconFill: '#000000', iconStroke: '#ffffff' },
+    { name: 'Green/Black',  short: 'G / Blk', invert: true,  tint: '#00ff00', iconFill: '#00ff00', iconStroke: '#00ff00' },
+    { name: 'Black/Green',  short: 'Blk / G', invert: false, tint: '#00ff00', iconFill: '#000000', iconStroke: '#00ff00' },
+    { name: 'Purple/Black',  short: 'P / Blk', invert: true,  tint: '#9900ff', iconFill: '#9900ff', iconStroke: '#9900ff' },
+    { name: 'Black/Purple',  short: 'Blk / P', invert: false, tint: '#9900ff', iconFill: '#000000', iconStroke: '#9900ff' },
   ];
 
   const BRIGHT = [
@@ -394,12 +396,14 @@
   let streamW = 0, streamH = 0;
   let focusRevertTimer = null;
   let frozen = false;
+  let lastAppliedZoom = null;  // guards applyNativeZoom — skip if zoom didn't change
 
   let cameraStarted = false;
 
   window.requestCamera = function () {
     // Stop any existing stream before requesting a new one.
     // Prevents orphaned tracks keeping the camera indicator lit.
+    lastAppliedZoom = null;  // force quality constraints to reapply on new stream
     if (track) { try { track.stop(); } catch (_) {} track = null; }
     if (video.srcObject) {
       try { video.srcObject.getTracks().forEach(t => t.stop()); } catch (_) {}
@@ -470,7 +474,12 @@
       const h = viewfinder.clientHeight || (window.innerHeight - 72);
       canvas.width  = w * dpr;
       canvas.height = h * dpr;
+      // imageSmoothingQuality is managed per-draw inside drawCurrentFrame(),
+      // not here — quality depends on whether the frame is frozen or live.
       if (ocrActive) clearOCR();  // overlay coords stale after rotation
+      // canvas.width/height clears the canvas to black. If paused, the draw loop
+      // won't redraw — do one immediate redraw so the frozen image survives rotation.
+      if (frozen) drawCurrentFrame();
     }
     resize();
     // ResizeObserver fires reliably on viewport rotation in Capacitor WebViews;
@@ -482,23 +491,7 @@
     }
 
     function draw() {
-      const vw = video.videoWidth, vh = video.videoHeight;
-      if (!frozen && video.readyState >= 2 && vw && vh) {
-        const cw = canvas.width, ch = canvas.height;
-        const tA = cw / ch, sA = vw / vh;
-        let sw, sh;
-        if (sA > tA) { sh = vh; sw = sh * tA; }
-        else         { sw = vw; sh = sw / tA; }
-        // Native zoom pre-zooms up to its hardware cap; canvas crops the rest.
-        // cropFactor = 1 when zoom ≤ nativeCap (canvas is lossless, native handles it all).
-        // cropFactor > 1 when zoom > nativeCap (canvas crops from the already-zoomed stream).
-        const nativeZ = zoomCaps ? clamp(state.zoom, zoomCaps.min, zoomCaps.max) : 1;
-        sw /= (state.zoom / nativeZ);
-        sh /= (state.zoom / nativeZ);
-        const sx = (vw - sw) / 2;
-        const sy = (vh - sh) / 2;
-        ctx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch);
-      }
+      if (!frozen) drawCurrentFrame();
       schedule();
     }
     function schedule() {
@@ -511,10 +504,43 @@
     schedule();
   }
 
+  // Draws one frame from the live video stream at the current zoom/crop settings.
+  // Defined at outer scope so both the draw loop (inside startCanvasLoop) and
+  // render() (which runs on zoom/mode changes) can call it while the frame is frozen.
+  function drawCurrentFrame() {
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (video.readyState < 2 || !vw || !vh) return;
+    // Lanczos ('high') only when frozen: the frame is still and detail matters.
+    // Live feed uses bilinear ('low') — motion makes the difference invisible,
+    // and Lanczos at 30fps is 3–5× more expensive on mobile hardware.
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = frozen ? 'high' : 'low';
+    const cw = canvas.width, ch = canvas.height;
+    const tA = cw / ch, sA = vw / vh;
+    let sw, sh;
+    if (sA > tA) { sh = vh; sw = sh * tA; }
+    else         { sw = vw; sh = sw / tA; }
+    // Native zoom pre-zooms up to its hardware cap; canvas crops the rest.
+    const nativeZ = zoomCaps ? clamp(state.zoom, zoomCaps.min, zoomCaps.max) : 1;
+    sw /= (state.zoom / nativeZ);
+    sh /= (state.zoom / nativeZ);
+    const sx = (vw - sw) / 2;
+    const sy = (vh - sh) / 2;
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch);
+  }
+
   function applyNativeZoom() {
     if (!track || !zoomCaps) return;
     const z = clamp(state.zoom, zoomCaps.min, zoomCaps.max);
-    track.applyConstraints({ advanced: [{ zoom: z }] }).catch(() => {});
+    // Guard: skip if zoom value hasn't changed. applyConstraints is called by render(),
+    // which fires on every button press — skipping no-op calls keeps UI response instant.
+    if (z === lastAppliedZoom) return;
+    lastAppliedZoom = z;
+    // advanced[] replaces all previous advanced constraints on every call —
+    // include videoStabilization and sharpness alongside zoom so they aren't reset.
+    track.applyConstraints({
+      advanced: [{ zoom: z, videoStabilization: false, sharpness: 8 }],
+    }).catch(() => {});
   }
 
   function render() {
@@ -543,6 +569,10 @@
     modeCircle.setAttribute('stroke', m.iconStroke);
 
     save();
+
+    // While frozen, the draw loop skips repainting — force one redraw so zoom
+    // and color mode changes are reflected immediately on the paused image.
+    if (frozen) drawCurrentFrame();
   }
 
   window.nextMode   = () => { state.modeIndex   = (state.modeIndex   + 1) % MODES.length;  render(); };

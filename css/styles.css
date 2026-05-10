@@ -72,7 +72,7 @@ hr {
   position: relative;
   z-index: 1;
   will-change: transform;
-  box-shadow: #636 0 0 10vw 0;
+  box-shadow: #90fa 0 0 10vw 0;
 }
 
 .phone-notch {
