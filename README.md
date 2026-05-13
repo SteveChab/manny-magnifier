@@ -48,33 +48,7 @@ The paid Android app includes additional controls not available in the browser:
 
 ### Repository Structure
 
-The git repository root is the web app itself, with the native project nested inside it.
-
-```
-mmagnifier/                           # Git root — deployed to mmagnifier.com
-├── index.html                        # Marketing landing page
-├── privacy/
-│   └── index.html                    # Privacy policy (https://mmagnifier.com/privacy)
-├── mmagnifier-logo.svg               # Wordmark SVG (used by landing page)
-├── css/
-│   └── styles.css                    # Shared styles: landing page + privacy page
-├── js/
-│   └── main.js                       # Landing page JS (phone parallax)
-├── app/
-│   ├── index.html                    # Web app: camera, filters, controls
-│   └── mmagnifier-logo.svg           # Copy — keeps app/ self-contained
-├── README.md                         # This file
-├── .github/
-│   └── workflows/static.yml          # GitHub Pages deployment (excludes native/)
-└── native/                           # Paid native app — Capacitor wrapper
-    ├── package.json                  # npm run sync — copies app/ files + cap sync
-    ├── capacitor.config.json         # webDir: "www"
-    ├── www/                          # Auto-generated staging dir (gitignored)
-    ├── ios/                          # Xcode project (git-tracked)
-    └── android/                      # Android Studio project (git-tracked)
-```
-
-The landing page lives at the root; the web app is served from `/app/`. The native app syncs from `app/index.html` into `native/www/`. Native-only features (torch, freeze) are gated behind `Capacitor.isNativePlatform()` and invisible in the browser. `native/` is excluded from the GitHub Pages deployment via rsync in the workflow.
+The git repository root is the web app itself, with the native project nested inside it. The landing page lives at the root; the web app is served from `/app/`; the native Capacitor wrapper lives in `/native/` and syncs from `app/index.html` into `native/www/`. End-to-end tests live in `/tests/` (see [Testing](#testing)). Native-only features (torch, freeze) are gated behind `Capacitor.isNativePlatform()` and invisible in the browser. `native/` is excluded from the GitHub Pages deployment via rsync in the workflow.
 
 ### Zoom Pipeline
 
@@ -136,6 +110,10 @@ npx cap open android  # open in Android Studio
 ```
 
 After editing `app/index.html`, run `npm run sync` from `native/` to push changes into both native projects.
+
+## Testing
+
+End-to-end Android tests live in `tests/` (WebDriverIO + Mocha via Appium). With a USB-attached Android device, run `cd tests && npm test`. Full setup, workflow, and coverage notes: see [TESTING.md](TESTING.md).
 
 ## Deployment
 

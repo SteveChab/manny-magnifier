@@ -1,0 +1,14 @@
+{
+  "name": "mmagnifier-tests",
+  "private": true,
+  "scripts": {
+    "test": "wdio run wdio.conf.js"
+  },
+  "devDependencies": {
+    "@wdio/appium-service": "^8",
+    "@wdio/cli": "^8",
+    "@wdio/local-runner": "^8",
+    "@wdio/mocha-framework": "^8",
+    "@wdio/spec-reporter": "^8"
+  }
+}

@@ -238,14 +238,17 @@
   .ocr-block {
     position: absolute;
     border: 2px solid #000;
-    outline: 2px solid #ff0;
-    background: rgba(255, 255, 0, 0.12);
+    outline: 2px solid #fff;
+    background: transparent;
     box-sizing: border-box;
     cursor: pointer;
     border-radius: 3px;
-    padding: .35em;
+    padding: .5em;
   }
-  .ocr-block:active { background: rgba(255, 255, 0, 0.35); }
+  .ocr-block:active {
+    border: 4px solid #000;
+    outline: 4px solid #fff;
+  }
 </style>
 </head>
 <body>
@@ -396,6 +399,8 @@
   let streamW = 0, streamH = 0;
   let focusRevertTimer = null;
   let frozen = false;
+  let frozenImage   = null;  // raw video frame captured at freeze time
+  let frozenNativeZ = 1;     // native zoom at freeze time, used for correct re-crop
   let lastAppliedZoom = null;  // guards applyNativeZoom — skip if zoom didn't change
 
   let cameraStarted = false;
@@ -508,8 +513,20 @@
   // Defined at outer scope so both the draw loop (inside startCanvasLoop) and
   // render() (which runs on zoom/mode changes) can call it while the frame is frozen.
   function drawCurrentFrame() {
-    const vw = video.videoWidth, vh = video.videoHeight;
-    if (video.readyState < 2 || !vw || !vh) return;
+    let source, vw, vh, nativeZ;
+    if (frozen && frozenImage) {
+      source  = frozenImage;
+      vw      = frozenImage.width;
+      vh      = frozenImage.height;
+      nativeZ = frozenNativeZ;
+    } else if (frozen) {
+      return;  // snapshot unavailable — hold current canvas content
+    } else {
+      vw = video.videoWidth; vh = video.videoHeight;
+      if (video.readyState < 2 || !vw || !vh) return;
+      source  = video;
+      nativeZ = zoomCaps ? clamp(state.zoom, zoomCaps.min, zoomCaps.max) : 1;
+    }
     // Lanczos ('high') only when frozen: the frame is still and detail matters.
     // Live feed uses bilinear ('low') — motion makes the difference invisible,
     // and Lanczos at 30fps is 3–5× more expensive on mobile hardware.
@@ -521,12 +538,12 @@
     if (sA > tA) { sh = vh; sw = sh * tA; }
     else         { sw = vw; sh = sw / tA; }
     // Native zoom pre-zooms up to its hardware cap; canvas crops the rest.
-    const nativeZ = zoomCaps ? clamp(state.zoom, zoomCaps.min, zoomCaps.max) : 1;
     sw /= (state.zoom / nativeZ);
     sh /= (state.zoom / nativeZ);
     const sx = (vw - sw) / 2;
     const sy = (vh - sh) / 2;
-    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch);
+    ctx.drawImage(source, sx, sy, sw, sh, 0, 0, cw, ch);
+    window._lastDrawnTimestamp = Date.now();
   }
 
   function applyNativeZoom() {
@@ -555,7 +572,7 @@
     if (zoomMode === 'canvas') {
       canvas.style.filter = filterValue;
       video.style.filter = '';
-      if (zoomCaps) applyNativeZoom();  // pre-zoom the stream for quality
+      if (zoomCaps && !frozen) applyNativeZoom();  // pre-zoom the stream for quality
     }
     // else: camera not yet started — nothing to filter yet
 
@@ -834,11 +851,24 @@
 
     frozen = !frozen;
     if (frozen) {
+      // Snapshot the raw video frame so drawCurrentFrame() re-crops from
+      // this frozen content instead of pulling a new live frame on each redraw.
+      const vw = video.videoWidth, vh = video.videoHeight;
+      if (vw && vh && video.readyState >= 2) {
+        const fc = new OffscreenCanvas(vw, vh);
+        fc.getContext('2d').drawImage(video, 0, 0);
+        frozenImage   = fc;
+        frozenNativeZ = zoomCaps ? clamp(state.zoom, zoomCaps.min, zoomCaps.max) : 1;
+      }
       document.getElementById('freeze-label').textContent = 'Resume';
       document.getElementById('freeze-icon').innerHTML =
         '<polygon points="6,4 6,20 20,12" />';
       document.getElementById('freeze-btn').style.background = '#222';
     } else {
+      frozenImage   = null;
+      frozenNativeZ = 1;
+      lastAppliedZoom = null;  // bypass guard so applyNativeZoom re-syncs camera
+      applyNativeZoom();
       document.getElementById('freeze-label').textContent = 'Pause';
       document.getElementById('freeze-icon').innerHTML =
         '<rect x="6" y="4" width="4" height="16" rx="0.5"/><rect x="14" y="4" width="4" height="16" rx="0.5"/>';
