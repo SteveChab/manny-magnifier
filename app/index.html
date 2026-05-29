@@ -399,8 +399,8 @@
   let streamW = 0, streamH = 0;
   let focusRevertTimer = null;
   let frozen = false;
-  let frozenImage   = null;  // raw video frame captured at freeze time
-  let frozenNativeZ = 1;     // native zoom at freeze time, used for correct re-crop
+  let frozenImage  = null;  // canvas snapshot taken at freeze time (for rotation restore + future save)
+  let frozenAtZoom = 1;     // state.zoom baked into the canvas when frozen; CSS scale = state.zoom / frozenAtZoom
   let lastAppliedZoom = null;  // guards applyNativeZoom — skip if zoom didn't change
 
   let cameraStarted = false;
@@ -471,6 +471,20 @@
   function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
   function fmtZoom(z) { return (Math.round(z * 10) / 10) + '×'; }
 
+  // Applies the current scale + pan transform to the frozen canvas.
+  // Clamps panX/panY so the canvas edge never goes past the viewfinder edge (no black bars).
+  // Called from pinch, cycleZoom, drag, and resize — keeps all transforms consistent.
+  function applyCanvasTransform() {
+    const S     = state.zoom / frozenAtZoom;
+    const maxPX = Math.max(0, viewfinder.clientWidth  * (S - 1) / 2);
+    const maxPY = Math.max(0, viewfinder.clientHeight * (S - 1) / 2);
+    panX = clamp(panX, -maxPX, maxPX);
+    panY = clamp(panY, -maxPY, maxPY);
+    const xform = `translate(${panX}px,${panY}px) scale(${S})`;
+    canvas.style.transform = xform;
+    document.getElementById('ocr-overlay').style.transform = xform;
+  }
+
   function startCanvasLoop() {
     viewfinder.classList.add('canvas-tier');
     const dpr = window.devicePixelRatio || 1;
@@ -479,12 +493,18 @@
       const h = viewfinder.clientHeight || (window.innerHeight - 72);
       canvas.width  = w * dpr;
       canvas.height = h * dpr;
-      // imageSmoothingQuality is managed per-draw inside drawCurrentFrame(),
-      // not here — quality depends on whether the frame is frozen or live.
       if (ocrActive) clearOCR();  // overlay coords stale after rotation
-      // canvas.width/height clears the canvas to black. If paused, the draw loop
-      // won't redraw — do one immediate redraw so the frozen image survives rotation.
-      if (frozen) drawCurrentFrame();
+      // canvas.width/height clears the canvas to black. If paused, restore from the
+      // snapshot taken at freeze time and re-apply the CSS zoom transform.
+      if (frozen) {
+        if (frozenImage) {
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(frozenImage, 0, 0, canvas.width, canvas.height);
+          applyCanvasTransform();
+        }
+        // else: snapshot not yet ready (async gap) — canvas stays black momentarily
+      }
     }
     resize();
     // ResizeObserver fires reliably on viewport rotation in Capacitor WebViews;
@@ -509,29 +529,18 @@
     schedule();
   }
 
-  // Draws one frame from the live video stream at the current zoom/crop settings.
-  // Defined at outer scope so both the draw loop (inside startCanvasLoop) and
-  // render() (which runs on zoom/mode changes) can call it while the frame is frozen.
+  // Draws one live frame from the camera stream at the current zoom/crop settings.
+  // Only called by the draw loop (live mode). While frozen, the canvas is a static
+  // pixel buffer — zoom is applied via CSS transform on the element, not by redrawing.
   function drawCurrentFrame() {
-    let source, vw, vh, nativeZ;
-    if (frozen && frozenImage) {
-      source  = frozenImage;
-      vw      = frozenImage.width;
-      vh      = frozenImage.height;
-      nativeZ = frozenNativeZ;
-    } else if (frozen) {
-      return;  // snapshot unavailable — hold current canvas content
-    } else {
-      vw = video.videoWidth; vh = video.videoHeight;
-      if (video.readyState < 2 || !vw || !vh) return;
-      source  = video;
-      nativeZ = zoomCaps ? clamp(state.zoom, zoomCaps.min, zoomCaps.max) : 1;
-    }
-    // Lanczos ('high') only when frozen: the frame is still and detail matters.
-    // Live feed uses bilinear ('low') — motion makes the difference invisible,
+    if (frozen) return;
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (video.readyState < 2 || !vw || !vh) return;
+    const nativeZ = zoomCaps ? clamp(state.zoom, zoomCaps.min, zoomCaps.max) : 1;
+    // Live feed always uses bilinear ('low') — motion makes quality difference invisible,
     // and Lanczos at 30fps is 3–5× more expensive on mobile hardware.
     ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = frozen ? 'high' : 'low';
+    ctx.imageSmoothingQuality = 'low';
     const cw = canvas.width, ch = canvas.height;
     const tA = cw / ch, sA = vw / vh;
     let sw, sh;
@@ -542,7 +551,7 @@
     sh /= (state.zoom / nativeZ);
     const sx = (vw - sw) / 2;
     const sy = (vh - sh) / 2;
-    ctx.drawImage(source, sx, sy, sw, sh, 0, 0, cw, ch);
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch);
     window._lastDrawnTimestamp = Date.now();
   }
 
@@ -586,10 +595,8 @@
     modeCircle.setAttribute('stroke', m.iconStroke);
 
     save();
-
-    // While frozen, the draw loop skips repainting — force one redraw so zoom
-    // and color mode changes are reflected immediately on the paused image.
-    if (frozen) drawCurrentFrame();
+    // While frozen, CSS filter on the canvas element handles mode/brightness changes
+    // without any redraw. Zoom is handled by CSS transform in the pinch/cycleZoom paths.
   }
 
   window.nextMode   = () => { state.modeIndex   = (state.modeIndex   + 1) % MODES.length;  render(); };
@@ -597,14 +604,25 @@
   window.cycleZoom  = () => {
     const next = zoomLevels.find(v => v > state.zoom + 0.001);
     state.zoom = (next != null) ? next : zoomLevels[0];
-    render();
+    if (frozen) {
+      // Zoom the static frozen canvas via CSS — no live frames involved
+      applyCanvasTransform();
+      zoomLabel.textContent = fmtZoom(state.zoom);
+      save();
+    } else {
+      render();
+    }
   };
 
-  // ── Pinch-to-zoom + tap-to-focus ─────────────────────────────
+  // ── Pinch-to-zoom + drag-to-pan + tap-to-focus ───────────────
   let pinching = false;
   let pinchStartDist = 0;
   let pinchStartZoom = 1;
   let tapStart = null;
+  let dragging   = false;      // true during a 1-finger drag while frozen
+  let dragStartX = 0, dragStartY = 0;  // client coords at drag start
+  let panX = 0,  panY = 0;             // current pan offset in screen px
+  let panStartX  = 0, panStartY  = 0; // panX/panY snapshot at drag start
 
   function dist(a, b) {
     return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
@@ -620,6 +638,13 @@
     } else if (e.touches.length === 1 && !pinching) {
       const t = e.touches[0];
       tapStart = { x: t.clientX, y: t.clientY, time: Date.now() };
+      if (frozen) {
+        dragging   = true;
+        dragStartX = t.clientX;
+        dragStartY = t.clientY;
+        panStartX  = panX;
+        panStartY  = panY;
+      }
     }
   }, { passive: false });
 
@@ -629,7 +654,21 @@
       if (!pinchStartDist) return;  // guard: avoid NaN if fingers started at same pixel
       const ratio = d / pinchStartDist;
       state.zoom = clamp(pinchStartZoom * ratio, 1, maxZoom);
-      render();
+      if (frozen) {
+        // Zoom the static frozen canvas via GPU-accelerated CSS transform.
+        applyCanvasTransform();
+        zoomLabel.textContent = fmtZoom(state.zoom);
+        save();
+      } else {
+        render();
+      }
+      e.preventDefault();
+    } else if (dragging && e.touches.length === 1 && frozen) {
+      // 1-finger drag: pan the frozen canvas
+      const t = e.touches[0];
+      panX = panStartX + (t.clientX - dragStartX);
+      panY = panStartY + (t.clientY - dragStartY);
+      applyCanvasTransform();  // clamps panX/panY to valid bounds internally
       e.preventDefault();
     }
   }, { passive: false });
@@ -639,6 +678,10 @@
       pinching = false;
       tapStart = null;
       return;
+    }
+    if (dragging && e.touches.length === 0) {
+      dragging = false;
+      // panX/panY intentionally preserved — position holds until unfreeze
     }
     if (e.touches.length === 0 && tapStart && supportsPOI && track && !frozen) {
       const t = e.changedTouches[0];
@@ -735,14 +778,17 @@
 
   // ── OCR + Text-to-Speech ─────────────────────────────────────
   let ocrActive     = false;
-  let ocrPreFrozen  = false;  // was frame already frozen by the user before OCR started?
   let ocrGeneration = 0;      // incremented on each runOCR call; guards stale async callbacks
 
   window.runOCR = async () => {
     if (!isNative) return;
-    if (ocrActive) { clearOCR(); return; }
+    if (ocrActive) {
+      // Second press: stop OCR and unfreeze — same as pressing Pause
+      clearOCR();
+      if (frozen) freezeFrame();
+      return;
+    }
 
-    ocrPreFrozen = frozen;
     if (!frozen) freezeFrame();
 
     ocrActive = true;
@@ -834,40 +880,40 @@
     ocrActive = false;
     const overlay = document.getElementById('ocr-overlay');
     overlay.innerHTML = '';
+    overlay.style.transform = '';
     overlay.classList.remove('active');
     document.getElementById('read-label').textContent    = 'Read';
     document.getElementById('read-btn').style.background = '';
-    // Restore pre-OCR frozen state — don't unfreeze a frame the user chose to hold
-    if (!ocrPreFrozen && frozen) freezeFrame();
+    // Does not touch frozen state — freeze/unfreeze is managed entirely by freezeFrame()
   }
 
   // ── Freeze frame ─────────────────────────────────────────────
-  // Freeze frame: stop the canvas draw loop so users can read steady text.
-  // The video stream keeps running; `frozen` simply stops drawImage() each frame.
+  // Freeze frame: stop the canvas draw loop so users can inspect steady content.
+  // The video stream keeps running; `frozen` stops drawImage() each frame.
+  // While frozen, pinch-zoom applies a CSS transform to the static canvas element —
+  // no redrawing, no live video involvement, structurally impossible to show new frames.
   window.freezeFrame = () => {
-    // If Read mode is active, tapping Pause/Resume exits it —
-    // clearOCR() restores the pre-OCR freeze state automatically
-    if (ocrActive) { clearOCR(); return; }
-
     frozen = !frozen;
     if (frozen) {
-      // Snapshot the raw video frame so drawCurrentFrame() re-crops from
-      // this frozen content instead of pulling a new live frame on each redraw.
-      const vw = video.videoWidth, vh = video.videoHeight;
-      if (vw && vh && video.readyState >= 2) {
-        const fc = new OffscreenCanvas(vw, vh);
-        fc.getContext('2d').drawImage(video, 0, 0);
-        frozenImage   = fc;
-        frozenNativeZ = zoomCaps ? clamp(state.zoom, zoomCaps.min, zoomCaps.max) : 1;
-      }
+      frozenAtZoom = state.zoom;  // record the zoom baked into the current canvas
+      panX = panY = 0;            // fresh pan state for this freeze session
+      // Async canvas snapshot for rotation-restore and future save feature.
+      // Not needed for zoom — that uses CSS transform on the existing static canvas.
+      createImageBitmap(canvas)
+        .then(bmp => { if (frozen) frozenImage = bmp; })
+        .catch(() => {});
       document.getElementById('freeze-label').textContent = 'Resume';
       document.getElementById('freeze-icon').innerHTML =
         '<polygon points="6,4 6,20 20,12" />';
       document.getElementById('freeze-btn').style.background = '#222';
     } else {
-      frozenImage   = null;
-      frozenNativeZ = 1;
-      lastAppliedZoom = null;  // bypass guard so applyNativeZoom re-syncs camera
+      if (ocrActive) clearOCR();  // tidy up OCR overlay if Pause pressed while Read active
+      panX = panY = 0;
+      dragging = false;
+      canvas.style.transform = '';  // clear zoom/pan applied during freeze
+      frozenImage  = null;
+      frozenAtZoom = 1;
+      lastAppliedZoom = null;  // force applyNativeZoom to re-sync camera to current zoom
       applyNativeZoom();
       document.getElementById('freeze-label').textContent = 'Pause';
       document.getElementById('freeze-icon').innerHTML =
