@@ -14,12 +14,14 @@ The app works in both directions. Point it at something nearby to magnify it; po
 ### Core Features
 
 - **Live camera magnification** — zoom levels built dynamically from hardware capabilities; 0.5× steps from 1–6×, then 1× steps to the camera's native optical max (e.g. 10×) on devices that expose zoom via WebRTC.
-- **5 color modes** optimized for different vision needs:
+- **7 color modes** optimized for different vision needs:
   - Color (unfiltered camera)
   - Yellow/Black
   - Black/Yellow
-  - White/Black
-  - Black/White
+  - Green/Black
+  - Black/Green
+  - Purple/Black
+  - Black/Purple
 - **4 contrast levels** — cycles 1×, 2×, 3×, 4×
 - **Zoom pill** — compact zoom indicator in the top-right corner; tap it to cycle levels
 - **Pinch-to-zoom** — continuous zoom gesture on the viewfinder
@@ -35,6 +37,7 @@ The paid Android app includes additional controls not available in the browser:
 - **Torch** — toggle the flashlight for illuminating close-up subjects
 - **Pause** — pause the live camera feed; tap Resume to continue
 - **Read** — freezes the frame, scans all text on-device (ML Kit OCR), and reads it aloud (TTS); tap any yellow-outlined block to re-read that section; tap Stop or Pause to exit
+- **Pan while frozen** — drag on the viewfinder while paused or reading to pan around the frozen frame; zoom and OCR outlines track correctly
 
 ## Technical Architecture
 
@@ -128,7 +131,7 @@ iOS and Android apps are built with Ionic Capacitor. The native projects live in
 ## Controls
 
 ### Web + native
-- **Color button** (left) — Cycles through 5 color modes
+- **Color button** (left) — Cycles through 7 color modes
 - **Brightness button** (right) — Cycles through 4 contrast levels (1×, 2×, 3×, 4×)
 - **Zoom pill** (top-right) — Tap to cycle zoom levels (1× to 6×)
 - **Pinch gesture** (viewfinder) — Continuous zoom
@@ -174,7 +177,6 @@ The web version is free to use. The native apps are paid.
 - Macro lens access (iPhone 13 Pro+ / recent Android flagships)
 
 ### Under consideration
-- Pan while zoomed (drag to move around)
 - Optical zoom lens selector (ultra-wide / main / telephoto)
 - Bookmarklet for browser injection
 - Desktop browser extension
