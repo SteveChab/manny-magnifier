@@ -1,9 +1,6 @@
 # macOS
 .DS_Store
 
-# Claude Code
-CLAUDE.md
-
 # Signing credentials (never commit these)
 native/*.p12
 native/*.mobileprovision

@@ -49,12 +49,17 @@
       </ul>
 
       <h2>Permissions</h2>
-      <p>The Android app requests two permissions:</p>
+      <p>The Android app declares four permissions:</p>
       <ul>
         <li><strong>Camera:</strong> required for live magnification</li>
         <li><strong>Flashlight:</strong> required for the torch button</li>
+        <li><strong>Internet</strong> and <strong>network state:</strong> declared by Google's on-device
+            text recognition library, which uses them to fetch its language model from Google Play once,
+            on first install. The app itself makes no network requests, and your camera images and
+            recognized text are never transmitted.</li>
       </ul>
-      <p>The text recognition and text-to-speech features use on-device system capabilities and require no additional permissions.</p>
+      <p>Camera is the only permission you are ever asked to approve. Text recognition and text-to-speech
+         run on device using built-in system capabilities.</p>
 
       <h2>Contact</h2>
       <p>Questions or concerns? Open an issue on <a href="https://github.com/SteveChab/manny-magnifier" target="_blank" rel="noopener">GitHub</a>.</p>

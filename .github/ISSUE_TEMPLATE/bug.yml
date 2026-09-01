@@ -1,0 +1,49 @@
+name: Bug report
+description: Something behaves incorrectly
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: The incorrect behaviour, in one or two sentences.
+    validations: { required: true }
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the app
+        2. Tap Pause
+        3. Switch to another app and come back
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should happen instead
+    validations: { required: true }
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where
+      options: ["Android app", "iOS app", "Web (mmagnifier.com/app)", "All"]
+    validations: { required: true }
+  - type: input
+    id: device
+    attributes:
+      label: Device and OS version
+      placeholder: Pixel 8, Android 15
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How will we know this is fixed? Be specific enough to test against.
+    validations: { required: true }
+  - type: textarea
+    id: regression
+    attributes:
+      label: Regression surface
+      description: >
+        Which components could a fix disturb? Dependency order:
+        camera → colour filters → contrast → UI buttons → landscape → OCR/TTS
+    validations: { required: true }

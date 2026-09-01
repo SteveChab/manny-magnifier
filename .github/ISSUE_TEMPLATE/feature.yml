@@ -1,0 +1,36 @@
+name: Feature request
+description: A new capability or improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The user problem
+      description: What can't a low-vision user do today? Describe the situation, not the solution.
+    validations: { required: true }
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+    validations: { required: true }
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Specific enough to test against.
+    validations: { required: true }
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - "P1 — blocks release"
+        - "P2 — high"
+        - "P3 — medium"
+        - "P4 — low / someday"
+    validations: { required: true }
+  - type: textarea
+    id: regression
+    attributes:
+      label: Regression surface
+      description: Which existing components would this touch?

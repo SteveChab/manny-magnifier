@@ -385,9 +385,19 @@
   let saveTimer;
   function save() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
-    }, 300);
+    saveTimer = setTimeout(writeState, 300);
+  }
+
+  function writeState() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
+  }
+
+  // Write immediately instead of waiting out the debounce. Called when the app is on its
+  // way out: settings changed in the last 300 ms would otherwise be lost if the OS kills
+  // a backgrounded app, and losing your colour mode is a real annoyance when you rely on it.
+  function flushSave() {
+    clearTimeout(saveTimer);
+    writeState();
   }
 
   let zoomLevels = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6]; // rebuilt from camera caps on start
@@ -407,8 +417,15 @@
   let lastAppliedZoom = null;  // guards applyNativeZoom — skip if zoom didn't change
 
   let cameraStarted = false;
+  let lastFrameAt   = 0;      // performance.now() of the last draw-loop tick; 0 = never ticked
+  let recovering    = false;  // guards against overlapping camera re-acquisitions
 
   window.requestCamera = function () {
+    // Self-guarding: set here rather than in the caller so every entry point
+    // (initial start, the Tap-to-Allow button, recoverCamera) is covered. Stopping
+    // the old track below can surface an 'ended' event on some WebViews, and this
+    // stops that from re-entering recovery.
+    recovering = true;
     // Stop any existing stream before requesting a new one.
     // Prevents orphaned tracks keeping the camera indicator lit.
     lastAppliedZoom = null;  // force quality constraints to reapply on new stream
@@ -431,6 +448,13 @@
     .then(stream => {
       video.srcObject = stream;
       track = stream.getVideoTracks()[0];
+      recovering  = false;
+      lastFrameAt = performance.now();
+
+      // The OS can revoke the camera at any time — another app claims it, or Android
+      // reclaims it while we're backgrounded. 'ended' is the camera telling us directly.
+      // Without this we sit on a dead track forever (Issue #22).
+      track.addEventListener('ended', () => recoverCamera());
 
       const caps = (track.getCapabilities && track.getCapabilities()) || {};
       const settings = (track.getSettings && track.getSettings()) || {};
@@ -466,7 +490,7 @@
       state.zoom = clamp(state.zoom, 1, maxZoom);
       render();
     })
-    .catch(() => { noCamera.style.display = 'flex'; });
+    .catch(() => { recovering = false; noCamera.style.display = 'flex'; });
   };
 
   window.requestCamera();
@@ -579,6 +603,9 @@
     }
 
     function draw() {
+      // Tick even while frozen. The stream is still live when paused, so a stalled
+      // tick means the camera died — not that the user pressed Pause.
+      lastFrameAt = performance.now();
       if (!frozen) drawCurrentFrame();
       schedule();
     }
@@ -835,23 +862,55 @@
     }
   };
 
-  // ── Page-visibility: release camera when backgrounded (web only) ──
-  // On native the OS suspends the WebView and handles this automatically.
-  // On web this frees the camera indicator light when the user switches tabs.
-  if (!isNative) {
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        if (track) { try { track.stop(); } catch (_) {} track = null; }
-        if (video.srcObject) {
-          try { video.srcObject.getTracks().forEach(t => t.stop()); } catch (_) {}
-          video.srcObject = null;
-          video.style.opacity = '0';
-        }
-      } else {
-        window.requestCamera();  // restart when tab becomes visible again
-      }
-    });
+  // ── App lifecycle + camera recovery ──────────────────────────
+  // Issue #22. Backgrounding the app lets the OS reclaim the camera. The
+  // MediaStreamTrack is left dead — no further frames are delivered — so the draw
+  // loop (driven by requestVideoFrameCallback) stops ticking and the app is stuck
+  // on its last frame until it's force-quit. This block previously ran on web only,
+  // on the assumption that the OS handled the native case. It does not.
+  //
+  // Three layers, because a low-vision user cannot diagnose a frozen screen:
+  //   1. visibilitychange — release on hide, re-acquire on show
+  //   2. track 'ended'    — the OS telling us directly that the camera is gone
+  //   3. a stall watchdog — last resort for a silent stall the other two miss
+  //
+  // A frozen frame survives all three. The canvas keeps its pixels and
+  // drawCurrentFrame() is a no-op while frozen, so re-acquiring the stream is
+  // invisible: someone who was mid-read comes back to the same text, and Resume
+  // then works normally instead of dead-ending.
+  const STALL_MS = 2500;  // ~75 missed frames at 30fps — unambiguously a stall
+
+  function releaseCamera() {
+    if (track) { try { track.stop(); } catch (_) {} track = null; }
+    if (video.srcObject) {
+      try { video.srcObject.getTracks().forEach(t => t.stop()); } catch (_) {}
+      video.srcObject = null;
+    }
   }
+
+  function recoverCamera() {
+    if (recovering || document.hidden) return;
+    recovering = true;
+    window.requestCamera();  // clears `recovering` once the stream settles or fails
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      flushSave();      // the OS may kill us while backgrounded — commit settings now
+      releaseCamera();
+    } else {
+      lastFrameAt = performance.now();  // grace period before the watchdog judges
+      recoverCamera();
+    }
+  });
+
+  window.addEventListener('pagehide', flushSave);
+
+  // Watchdog: if the loop has gone quiet while we are visible, the stream is dead.
+  setInterval(() => {
+    if (document.hidden || recovering || !cameraStarted) return;
+    if (lastFrameAt && performance.now() - lastFrameAt > STALL_MS) recoverCamera();
+  }, 1000);
 
   // ── Landscape layout ─────────────────────────────────────────
   // When viewport is wider than tall, toggle the 'landscape' class on body.
@@ -951,7 +1010,7 @@
     // window.speechSynthesis is undefined in Capacitor's Android WebView.
     const TTS = window.Capacitor?.Plugins?.TextToSpeech;
     if (TTS) {
-      TTS.speak({ text, locale: 'en-US' }).catch(() => {});
+      TTS.speak({ text, lang: 'en-US' }).catch(() => {});
       return;
     }
     // Web fallback (browser / future environments)

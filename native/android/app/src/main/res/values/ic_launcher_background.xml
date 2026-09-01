@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#FFFFFF</color>
+    <!-- Brand ground for the adaptive icon. The mark is a yellow circle, so the
+         background must be black for the same contrast the app itself uses. -->
+    <color name="ic_launcher_background">#000000</color>
 </resources>

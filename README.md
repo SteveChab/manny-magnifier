@@ -107,10 +107,18 @@ Open on a mobile browser and allow camera access.
 ### Native app (requires Xcode + Android Studio)
 ```bash
 cd native
+nvm use               # .nvmrc pins Node 24 LTS — the Capacitor 8 CLI requires Node >= 22
 npm run sync          # copies app/index.html + app/mmagnifier-logo.svg into www/, then cap sync
-npx cap open ios      # open in Xcode
 npx cap open android  # open in Android Studio
+npx cap open ios      # open in Xcode (see note below)
 ```
+
+Android targets `compileSdk`/`targetSdk` 36 with `minSdk` 24, matching Capacitor 8 and Google Play's
+target-API requirement effective 31 August 2026.
+
+> **iOS note:** `pod install` currently fails — GoogleMLKit/TextRecognition 8.0.0 requires a higher
+> deployment target than the project's `platform :ios, '15.0'`. Use `npx cap sync android` to sync
+> Android alone until the iOS deployment target is raised.
 
 After editing `app/index.html`, run `npm run sync` from `native/` to push changes into both native projects.
 
