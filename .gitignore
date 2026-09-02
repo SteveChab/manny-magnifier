@@ -1,11 +1,13 @@
 # macOS
 .DS_Store
 
-# Signing credentials (never commit these)
-native/*.p12
-native/*.mobileprovision
-native/*.jks
-native/*.keystore
+# Signing credentials (never commit these).
+# Repo-wide, not just native/ — assets/ is now a tempting place to drop a keystore,
+# and a misplaced .jks in a public repo cannot be un-published.
+*.p12
+*.mobileprovision
+*.jks
+*.keystore
 
 # Android Studio local IDE state (not needed in source control)
 native/android/.idea/

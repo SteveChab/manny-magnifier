@@ -1,0 +1,7 @@
+.DS_Store
+
+# Signing credentials must never live here either.
+*.jks
+*.keystore
+*.p12
+*.mobileprovision

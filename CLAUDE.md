@@ -13,6 +13,13 @@
 - `.claude/skills/mmagnifier-engineering-health-check/` — the pre-flight risk gate. Run it before
   touching code.
 
+- `assets/` — brand source art and the generated Play Store graphics. Excluded from the Pages
+  deploy, so it is in the repo but not served on mmagnifier.com.
+
+- `ops/` — publishing runbook, marketing plan, product concepts. In the repo and therefore public;
+  excluded from the Pages deploy so it is not served on mmagnifier.com. Credentials and unannounced
+  commercial terms must still never be committed.
+
 Architecture detail lives in `README.md`. Don't duplicate it here.
 
 ## Toolchain floor

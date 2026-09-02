@@ -38,7 +38,7 @@ jobs:
           mkdir -p /tmp/web-deploy
           rsync -av --exclude=native/ --exclude=.github/ --exclude=.git/ \
                  --exclude=tests/ --exclude=docs/ --exclude=.claude/ \
-                 --exclude='*.md' . /tmp/web-deploy/
+                 --exclude='*.md' --exclude=assets/ --exclude=ops/ . /tmp/web-deploy/
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
