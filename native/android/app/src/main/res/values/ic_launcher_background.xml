@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Brand ground for the adaptive icon. The mark is a yellow circle, so the
-         background must be black for the same contrast the app itself uses. -->
+    <!-- Adaptive icon backgrounds must be opaque — Android composites a transparent one over
+         white, which is where the white plate came from. Black is the app's own ground colour,
+         and the yellow face sits on it as the foreground layer. -->
     <color name="ic_launcher_background">#000000</color>
 </resources>
